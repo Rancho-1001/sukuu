@@ -1,0 +1,147 @@
+# Sukuu — School Fee Management System
+
+> A school management platform that lets administrators track student fees (tuition, feeding, uniforms), lets parents pay online and in installments, and gives staff a clean view of who owes what.
+
+**Sukuu** means "school" in Twi. This was built after teaching in Ghana, where fee and feeding-payment tracking was largely manual and error-prone — spreadsheets, paper receipt books, and a bursar reconciling by hand.
+
+> **Status:** In development. See [docs/spec.md](docs/spec.md) for the full specification and [Roadmap](#roadmap) for what is deliberately out of scope.
+
+---
+
+## What this project is about
+
+Three things, deliberately:
+
+1. **Full-stack with real payments** — React frontend, FastAPI backend, Postgres, Stripe integration with webhook-driven reconciliation.
+2. **Access control that is actually enforced** — three roles with real permission boundaries in backend middleware, JWT auth, and an audit log. Not UI-only guards.
+3. **Financial correctness** — partial payments, installments, overpayment rejection under concurrency, and money stored as exact decimals rather than floats.
+
+## Core loop
+
+```
+Admin sets up school (students, classes, fee types)
+   → assigns fees to students
+      → parents/staff see what's owed
+         → payments recorded (online via Stripe, or cash by staff)
+            → dashboard shows paid vs. outstanding
+```
+
+## Roles & permissions
+
+| Capability | Admin | Staff/Bursar | Parent |
+|---|:---:|:---:|:---:|
+| Manage students & classes | ✅ | ❌ | ❌ |
+| Define/edit fee structures | ✅ | ❌ | ❌ |
+| Assign fees to students/classes | ✅ | ❌ | ❌ |
+| Record offline (cash) payments | ✅ | ✅ | ❌ |
+| View all payments & reports | ✅ | ✅ | ❌ |
+| View own child's fees only | — | — | ✅ |
+| Pay fees online (Stripe) | — | — | ✅ |
+| View own payment history | — | — | ✅ |
+
+Every boundary above is enforced server-side. The UI hides what a role cannot do; the API refuses it.
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Backend | FastAPI (Python 3.12) |
+| Database | PostgreSQL |
+| ORM / migrations | SQLAlchemy + Alembic |
+| Frontend | React + Vite |
+| Auth | JWT with role-based dependency guards |
+| Payments | Stripe (test mode), webhook-driven |
+| Deploy | Render/Railway (API + DB), Vercel (frontend) |
+
+## Data model
+
+Seven tables: `users`, `students`, `classes`, `fee_types`, `fee_assignments`, `payments`, `audit_log`.
+
+The centre of the model is **`fee_assignments` has many `payments`** — that one-to-many is what makes installments possible.
+
+```
+outstanding = fee_assignment.amount − SUM(payments.amount_paid)
+```
+
+Two rules the implementation takes seriously:
+
+- **Money is never a float.** Amounts are `NUMERIC(12,2)` in Postgres and `Decimal` in Python.
+- **Overpayment is rejected under concurrency.** The balance check and the payment insert happen in one transaction with a row lock on the fee assignment, so two simultaneous payments cannot both pass the check.
+
+## Project structure
+
+```
+sukuu/
+├── backend/
+│   ├── app/
+│   │   ├── api/routes/    # HTTP endpoints, thin
+│   │   ├── core/          # config, security, JWT, role guards
+│   │   ├── db/            # session, base, migrations
+│   │   ├── models/        # SQLAlchemy models
+│   │   ├── schemas/       # Pydantic request/response models
+│   │   └── services/      # business logic (balances, payments, audit)
+│   └── tests/
+├── frontend/              # React + Vite
+└── docs/
+    └── spec.md            # full project specification
+```
+
+## Getting started
+
+Prerequisites: Python 3.12+, Node 20+, PostgreSQL 15+.
+
+```bash
+git clone https://github.com/Rancho-1001/sukuu.git
+cd sukuu
+```
+
+**Backend**
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env    # then fill in DATABASE_URL, JWT_SECRET, Stripe keys
+uvicorn app.main:app --reload
+```
+
+API docs are then at `http://localhost:8000/docs`.
+
+**Frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Build order
+
+1. **Week 1** — Schema, migrations, JWT auth, role guards, and audit logging. Security scaffolding goes in *before* the endpoints so nothing has to be retrofitted.
+2. **Week 2** — Admin CRUD (students, classes, fee types, assignments) behind those guards, plus the outstanding-balance service and its tests.
+3. **Week 3** — Parent payment flow, Stripe checkout, webhook reconciliation, installments, and the dashboard.
+
+## Roadmap
+
+Deliberately **not** in v1:
+
+- Attendance tracking
+- Grades / report cards
+- Timetables & scheduling
+- SMS / email fee reminders *(the most obvious next feature)*
+- Multi-school / multi-tenant support
+- Refunds & reversals
+- Feeding as a prepaid top-up balance
+- Localized payment gateways (Paystack / Flutterwave)
+
+## Production notes
+
+**Payment gateway.** Stripe does not operate in Ghana directly, so this demo uses Stripe USD test mode — the standard choice for a portfolio build. A production deployment for the target market would use **Paystack** or **Flutterwave**, both of which support mobile money, which is how most school fees actually get paid there.
+
+**Currency.** The demo is USD. A production version would be locale-aware and denominated in GHS.
+
+**Parent–student relationship.** v1 models one parent per student. Real households often have two guardians; that would become a join table in v2.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
