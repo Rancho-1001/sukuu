@@ -19,9 +19,9 @@ can be written or tested locally until it is.
 - [x] Dependencies pinned and installing cleanly
 - [x] Test harness with unit / api / integration split
 - [x] GitHub Actions running ruff and pytest against Postgres 16
-- [ ] Install PostgreSQL 16 and start it
-- [ ] Create the `sukuu` and `sukuu_test` databases and role
-- [ ] Fill in `.env` with a real JWT secret (`openssl rand -hex 32`)
+- [x] Install PostgreSQL 16 and start it
+- [x] Create the `sukuu` and `sukuu_test` databases and role
+- [x] Fill in `.env` with a real JWT secret (`openssl rand -hex 32`)
 - [ ] Create a Stripe account and copy the test-mode keys
 - [ ] Install the Stripe CLI for local webhook forwarding
 - [ ] Bump `actions/checkout` and `actions/setup-python` off deprecated Node 20
