@@ -153,6 +153,8 @@ CI runs lint, format check, and the full suite against Python 3.14 and Postgres 
 
 ## Build order
 
+The task-level checklist lives in [docs/roadmap.md](docs/roadmap.md).
+
 1. **Week 1** — Schema, migrations, JWT auth, role guards, and audit logging. Security scaffolding goes in *before* the endpoints so nothing has to be retrofitted.
 2. **Week 2** — Admin CRUD (students, classes, fee types, assignments) behind those guards, plus the outstanding-balance service and its tests.
 3. **Week 3** — Parent payment flow, Stripe checkout, webhook reconciliation, installments, and the dashboard.
