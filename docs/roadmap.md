@@ -6,8 +6,9 @@ Phases are numbered because they are a dependency chain, not a preference: the p
 work cannot start before the models exist, and the models should not be written before
 the role guards do.
 
-**Blocking everything after Phase 0:** PostgreSQL is not installed. Nothing in Phases 1-5
-can be written or tested locally until it is.
+**Phase 0 is closed.** Postgres 16 is running locally and the `db`-marked tests execute
+rather than skip, so Phase 1 onward can be written and tested. Stripe account setup moved
+to Phase 5, which is where the first line of code that reads a Stripe key gets written.
 
 ---
 
@@ -22,9 +23,7 @@ can be written or tested locally until it is.
 - [x] Install PostgreSQL 16 and start it
 - [x] Create the `sukuu` and `sukuu_test` databases and role
 - [x] Fill in `.env` with a real JWT secret (`openssl rand -hex 32`)
-- [ ] Create a Stripe account and copy the test-mode keys
-- [ ] Install the Stripe CLI for local webhook forwarding
-- [ ] Bump `actions/checkout` and `actions/setup-python` off deprecated Node 20
+- [x] Bump `actions/checkout` and `actions/setup-python` off deprecated Node 20
 
 **Done when** `pytest -m db` runs instead of skipping.
 
@@ -114,6 +113,13 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 5 — Stripe and installments
 
+The account setup lives here rather than in Phase 0 because nothing before this phase
+reads a Stripe key, and a `whsec_` secret for local forwarding is printed by `stripe
+listen` at the moment you need it — it is not a value you can fetch from the dashboard
+in advance.
+
+- [ ] Create a Stripe account and copy the test-mode key into `.env`
+- [ ] Install the Stripe CLI for local webhook forwarding
 - [ ] `POST /payments/checkout-session` for a chosen amount
 - [ ] Validate the requested amount against the balance before creating the session
 - [ ] `POST /webhooks/stripe` with signature verification
