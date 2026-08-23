@@ -1,11 +1,15 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
-alembic==1.14.0
-psycopg[binary]==3.2.4
-pydantic==2.10.4
-pydantic-settings==2.7.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-python-multipart==0.0.20
-stripe==11.4.1
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+sqlalchemy==2.0.52
+alembic==1.19.1
+psycopg[binary]==3.3.4
+pydantic==2.13.4
+pydantic-settings==2.15.0
+python-multipart==0.0.32
+stripe==15.5.1
+
+# Auth. bcrypt directly rather than passlib: passlib's last release was
+# Oct 2020 and its bcrypt handler crashes against bcrypt 5.x. PyJWT rather
+# than python-jose, which is likewise unmaintained.
+bcrypt==5.0.0
+pyjwt==2.13.0

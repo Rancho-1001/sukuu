@@ -47,11 +47,11 @@ Every boundary above is enforced server-side. The UI hides what a role cannot do
 
 | Layer | Choice |
 |---|---|
-| Backend | FastAPI (Python 3.12) |
+| Backend | FastAPI (Python 3.14) |
 | Database | PostgreSQL |
 | ORM / migrations | SQLAlchemy + Alembic |
 | Frontend | React + Vite |
-| Auth | JWT with role-based dependency guards |
+| Auth | PyJWT + bcrypt, with role-based dependency guards |
 | Payments | Stripe (test mode), webhook-driven |
 | Deploy | Render/Railway (API + DB), Vercel (frontend) |
 
@@ -93,7 +93,13 @@ sukuu/
 
 ## Getting started
 
-Prerequisites: Python 3.12+, Node 20+, PostgreSQL 15+.
+Prerequisites: Python 3.14, Node 20+, PostgreSQL 16+.
+
+If you don't have Python 3.14, [uv](https://docs.astral.sh/uv/) installs it without touching your system Python or needing admin rights:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh && uv python install 3.14
+```
 
 ```bash
 git clone https://github.com/Rancho-1001/sukuu.git
@@ -104,8 +110,8 @@ cd sukuu
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+uv venv --python 3.14 && source .venv/bin/activate
+uv pip install -r requirements-dev.txt
 cp .env.example .env    # then fill in DATABASE_URL, JWT_SECRET, Stripe keys
 uvicorn app.main:app --reload
 ```
@@ -143,7 +149,7 @@ Two deliberate choices worth naming:
 
 **Tests for unwritten code skip themselves, then activate.** `tests/integration/test_payment_concurrency.py` guards on `importorskip("app.services.payments")`, so it stays quiet until that module exists and then starts running on its own. Nothing has to be un-skipped by hand and forgotten.
 
-CI runs lint, format check, and the full suite against Python 3.12 and Postgres 16 on every push and pull request.
+CI runs lint, format check, and the full suite against Python 3.14 and Postgres 16 on every push and pull request.
 
 ## Build order
 
