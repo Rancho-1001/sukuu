@@ -1,5 +1,7 @@
 # Sukuu — School Fee Management System
 
+[![CI](https://github.com/Rancho-1001/sukuu/actions/workflows/ci.yml/badge.svg)](https://github.com/Rancho-1001/sukuu/actions/workflows/ci.yml)
+
 > A school management platform that lets administrators track student fees (tuition, feeding, uniforms), lets parents pay online and in installments, and gives staff a clean view of who owes what.
 
 **Sukuu** means "school" in Twi. This was built after teaching in Ghana, where fee and feeding-payment tracking was largely manual and error-prone — spreadsheets, paper receipt books, and a bursar reconciling by hand.
@@ -81,6 +83,9 @@ sukuu/
 │   │   ├── schemas/       # Pydantic request/response models
 │   │   └── services/      # business logic (balances, payments, audit)
 │   └── tests/
+│       ├── unit/          # pure logic, no I/O
+│       ├── api/           # HTTP behaviour via TestClient
+│       └── integration/   # real Postgres, marked `db`
 ├── frontend/              # React + Vite
 └── docs/
     └── spec.md            # full project specification
@@ -100,7 +105,7 @@ cd sukuu
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env    # then fill in DATABASE_URL, JWT_SECRET, Stripe keys
 uvicorn app.main:app --reload
 ```
@@ -114,6 +119,31 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Testing
+
+```bash
+cd backend
+pytest                       # everything
+pytest tests/unit -q         # pure logic, no database needed
+pytest -m db                 # only the tests that need Postgres
+pytest --cov                 # with a coverage report
+ruff check . && ruff format --check .
+```
+
+The suite is split three ways by what each layer needs:
+
+- **`tests/unit/`** — the money rules in `app/services/balances.py`. No database, no HTTP, no fixtures. This is where partial payments, exact payoffs, rounding, and overpayment rejection are pinned down, because that logic is the part of the product most expensive to get wrong.
+- **`tests/api/`** — endpoint behaviour through FastAPI's `TestClient`, including the role boundaries. A permission test that only checks the UI proves nothing; these hit the API directly.
+- **`tests/integration/`** — anything needing real SQL, marked `db`. These **skip** when no Postgres is reachable so local runs stay useful, and CI runs a Postgres 16 service container so they cannot skip silently where it counts.
+
+Two deliberate choices worth naming:
+
+**No SQLite substitute.** Tests run against the same Postgres the app uses. Swapping in SQLite would break `NUMERIC` semantics and `SELECT ... FOR UPDATE` — precisely the two things the financial tests exist to verify.
+
+**Tests for unwritten code skip themselves, then activate.** `tests/integration/test_payment_concurrency.py` guards on `importorskip("app.services.payments")`, so it stays quiet until that module exists and then starts running on its own. Nothing has to be un-skipped by hand and forgotten.
+
+CI runs lint, format check, and the full suite against Python 3.12 and Postgres 16 on every push and pull request.
 
 ## Build order
 
