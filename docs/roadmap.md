@@ -203,22 +203,34 @@ bugs get in, and this is the part that carries the security story.
 > cannot onboard a new family end to end. Doing it properly needs user creation, an invite,
 > and a password-set flow — a bigger piece of work than the picker that exposed it, and
 > not something to smuggle in behind one. Carried to the backlog in Phase 8.
-- [ ] Scaffold React + Vite with TypeScript
-- [ ] API client with token attachment and 401 handling
-- [ ] Auth context, login page, protected routes
-- [ ] Admin — students, classes, fee types, assignments
-- [ ] Admin dashboard — collected, outstanding, per-class breakdown
-- [ ] Staff — outstanding balances, record a cash payment
-- [ ] Parent — itemised fees per child with paid and outstanding
-- [ ] Parent — pay in full or enter a partial amount
-- [ ] Parent — payment history
-- [ ] Loading, empty, and error states on every view
-- [ ] Currency formatted in one place, never with raw float maths
+- [x] Scaffold React + Vite with TypeScript
+- [x] API client with token attachment and 401 handling
+- [x] Auth context, login page, protected routes
+- [x] Admin — students, classes, fee types, assignments
+- [x] Admin dashboard — collected, outstanding, per-class breakdown
+- [x] Staff — outstanding balances, record a cash payment
+- [x] Parent — itemised fees per child with paid and outstanding
+- [x] Parent — pay in full or enter a partial amount
+- [x] Parent — payment history
+- [x] Loading, empty, and error states on every view
+- [x] Currency formatted in one place, never with raw float maths
 
 > Hiding a button the API would refuse is courtesy, not control. If any permission exists
 > only in the UI, the security story collapses at the network tab.
 
-**Done when** all three roles can complete their whole job without touching the API docs.
+> Loading, empty and error are one component, used by every list. That is what stops the
+> third one being the one forgotten on the fifth page.
+
+> Two 401s are not the same. A token that expired mid-session drops the session and returns
+> to the login page; a wrong password at that page is a failed attempt and must clear
+> nothing. The difference is whether a token was sent at all.
+
+> The payment form is shared by the bursar taking cash and the parent paying by card. The
+> rules are the API's, and writing them twice is how two screens end up disagreeing about
+> whether 0.00 is a payment. Its client-side checks are a courtesy — the server validates
+> again against a balance that may have moved, and its refusal is what gets shown.
+
+**Done when** all three roles can complete their whole job without touching the API docs. ✅
 
 ---
 

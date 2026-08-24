@@ -5,7 +5,11 @@ import { RequireAuth, RequireRole } from "./auth/guards";
 import { homeFor } from "./auth/roles";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
+import { AssignFeesPage } from "./pages/admin/AssignFeesPage";
+import { ClassesPage } from "./pages/admin/ClassesPage";
 import { DashboardPage } from "./pages/admin/DashboardPage";
+import { FeeTypesPage } from "./pages/admin/FeeTypesPage";
+import { StudentsPage } from "./pages/admin/StudentsPage";
 import { ChildBalancePage } from "./pages/parent/ChildBalancePage";
 import { MyChildrenPage } from "./pages/parent/MyChildrenPage";
 import { CollectionsPage } from "./pages/staff/CollectionsPage";
@@ -29,11 +33,15 @@ export function App() {
           {/* Admin */}
           <Route element={<RequireRole roles={["admin"]} />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/classes" element={<ClassesPage />} />
+            <Route path="/fee-types" element={<FeeTypesPage />} />
+            <Route path="/assignments" element={<AssignFeesPage />} />
           </Route>
 
           {/* Bursar and admin */}
           <Route element={<RequireRole roles={["admin", "staff"]} />}>
             <Route path="/collections" element={<CollectionsPage />} />
+            <Route path="/students" element={<StudentsPage />} />
           </Route>
 
           {/* Parent */}

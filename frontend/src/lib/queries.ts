@@ -23,6 +23,7 @@ import type {
   SchoolSummary,
   Student,
   StudentBalance,
+  User,
 } from "./types";
 
 export const keys = {
@@ -36,6 +37,7 @@ export const keys = {
   payments: (params?: unknown) => ["payments", params] as const,
   myChildren: () => ["my-children"] as const,
   summary: () => ["summary"] as const,
+  users: (params?: unknown) => ["users", params] as const,
 };
 
 /** The parent's own children. Answered from the token, so it takes no arguments. */
@@ -43,6 +45,14 @@ export function useMyChildren() {
   return useQuery({
     queryKey: keys.myChildren(),
     queryFn: () => api.get<Student[]>("/me/children"),
+  });
+}
+
+/** Accounts, for the pickers. Admin-only on the API side. */
+export function useUsers(params: ListParams & { role?: string; q?: string } = {}) {
+  return useQuery({
+    queryKey: keys.users(params),
+    queryFn: () => api.get<Page<User>>(`/users${query({ limit: 200, ...params })}`),
   });
 }
 
