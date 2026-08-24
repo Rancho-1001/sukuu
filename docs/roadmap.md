@@ -68,6 +68,10 @@ bugs get in, and this is the part that carries the security story.
 - [x] Audit logging on every mutating request
 - [x] Tests covering the full permission matrix, allow and deny
 - [x] Test that parent A gets 403/404 on parent B's child
+- [x] Rate limit failed logins, per account and per source address
+
+> The login limiter counts rows in `audit_log`, so the count is shared across
+> workers. An in-memory counter gives an attacker one full allowance per process.
 
 > Return 404 rather than 403 for records a user may not see. A 403 confirms the record
 > exists, which leaks the thing the guard is protecting.
