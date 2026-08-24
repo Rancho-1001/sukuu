@@ -43,11 +43,24 @@ class TestLogin:
         assert wrong_password.status_code == no_such_user.status_code
         assert wrong_password.json() == no_such_user.json()
 
-    def test_email_is_matched_case_insensitively(self, api, make_user):
+    @pytest.mark.parametrize(
+        "typed", ["mixed.case@example.com", "Mixed.Case@Example.com", "MIXED.CASE@EXAMPLE.COM"]
+    )
+    def test_email_is_matched_case_insensitively(self, api, make_user, typed):
         make_user(UserRole.STAFF, email="mixed.case@example.com")
         response = api.post(
             "/auth/login",
-            data={"username": "MIXED.CASE@EXAMPLE.COM", "password": "correct-horse"},
+            data={"username": typed, "password": "correct-horse"},
+        )
+        assert response.status_code == 200
+
+    def test_a_user_stored_with_capitals_can_still_log_in(self, api, make_user):
+        """Regression: a capitalised email used to lock the account out entirely."""
+        user = make_user(UserRole.PARENT, email="Capitalised@Example.com")
+        assert user.email == "capitalised@example.com"
+        response = api.post(
+            "/auth/login",
+            data={"username": "Capitalised@Example.com", "password": user.raw_password},
         )
         assert response.status_code == 200
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import CheckConstraint, Enum, ForeignKey, String, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.db.base import Base, TimestampMixin
 from app.models.enums import StudentStatus, UserRole
@@ -19,7 +19,18 @@ def _pg_enum(enum_cls: type, name: str) -> Enum:
 
 
 class User(Base, TimestampMixin):
+    """An account.
+
+    Emails are stored lower-cased. Without that, a user created as
+    "Ama@example.com" could never log in - the login lookup lower-cases what
+    the user typed, so neither spelling would match the stored value - and
+    "ama@example.com" could be registered a second time, because a plain unique
+    constraint is case-sensitive. The validator normalises on write and the
+    CHECK constraint means a raw INSERT cannot bypass it.
+    """
+
     __tablename__ = "users"
+    __table_args__ = (CheckConstraint("email = lower(email)", name="email_is_lowercase"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
@@ -30,6 +41,10 @@ class User(Base, TimestampMixin):
     children: Mapped[list[Student]] = relationship(
         back_populates="parent", foreign_keys="Student.parent_id"
     )
+
+    @validates("email")
+    def _normalise_email(self, _key: str, value: str) -> str:
+        return value.strip().lower() if value else value
 
     def __repr__(self) -> str:
         return f"<User {self.id} {self.email} {self.role.value}>"
