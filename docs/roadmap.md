@@ -193,9 +193,16 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 6 — Frontend
 
-- [x] Two endpoints the frontend needed and the API did not have:
-      `GET /me/children` (a parent had no way to discover their own children) and
-      `GET /reports/summary` (per-class totals in one query, not an N+1 in the browser)
+- [x] Three endpoints the frontend needed and the API did not have:
+      `GET /me/children` (a parent had no way to discover their own children),
+      `GET /reports/summary` (per-class totals in one query, not an N+1 in the browser),
+      and `GET /users?role=parent` (attaching a student to a parent needed a picker)
+
+> **Known gap, named rather than worked around:** there is no way to open a user account
+> through the API. Parent and staff accounts arrive through the seed script, so an admin
+> cannot onboard a new family end to end. Doing it properly needs user creation, an invite,
+> and a password-set flow — a bigger piece of work than the picker that exposed it, and
+> not something to smuggle in behind one. Carried to the backlog in Phase 8.
 - [ ] Scaffold React + Vite with TypeScript
 - [ ] API client with token attachment and 401 handling
 - [ ] Auth context, login page, protected routes
