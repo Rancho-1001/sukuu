@@ -10,6 +10,15 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+
+    # Stripe does not operate in Ghana, so a real deployment for this market
+    # would use Paystack or Flutterwave; Stripe is here because test mode makes
+    # the payment flow demonstrable. Charging in USD follows from that - the
+    # money rules and the reconciliation are the transferable part, not the
+    # processor.
+    stripe_currency: str = "usd"
+    stripe_success_url: str = "http://localhost:5173/payments/success"
+    stripe_cancel_url: str = "http://localhost:5173/payments/cancelled"
     frontend_origin: str = "http://localhost:5173"
 
     # Failed logins tolerated per window, counted separately per account and
