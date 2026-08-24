@@ -51,5 +51,20 @@ jobs:
       - name: Check formatting
         run: ruff format --check .
 
+      - name: Migrations are reversible
+        # Autogenerate does not drop Postgres enum types on downgrade, so a
+        # broken downgrade only shows up on the *second* upgrade. Cycling twice
+        # is what catches it.
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+          alembic downgrade base
+
+      - name: Seed script runs
+        run: |
+          alembic upgrade head
+          python -m app.db.seed
+
       - name: Test
         run: pytest --cov --cov-report=term-missing

@@ -1,0 +1,96 @@
+"""Users, classes, and students."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base, TimestampMixin
+from app.models.enums import StudentStatus, UserRole
+
+if TYPE_CHECKING:
+    from app.models.fees import FeeAssignment
+
+
+def _pg_enum(enum_cls: type, name: str) -> Enum:
+    return Enum(enum_cls, name=name, values_callable=lambda e: [m.value for m in e])
+
+
+class User(Base, TimestampMixin):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    role: Mapped[UserRole] = mapped_column(_pg_enum(UserRole, "user_role"), nullable=False)
+
+    children: Mapped[list[Student]] = relationship(
+        back_populates="parent", foreign_keys="Student.parent_id"
+    )
+
+    def __repr__(self) -> str:
+        return f"<User {self.id} {self.email} {self.role.value}>"
+
+
+class SchoolClass(Base, TimestampMixin):
+    """A class group, e.g. "Grade 5B" for a given academic year.
+
+    Named SchoolClass because ``class`` is a Python keyword; the table stays
+    ``classes`` as in the spec.
+    """
+
+    __tablename__ = "classes"
+    __table_args__ = (UniqueConstraint("name", "academic_year", name="name_year"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    academic_year: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    students: Mapped[list[Student]] = relationship(back_populates="school_class")
+
+    def __repr__(self) -> str:
+        return f"<SchoolClass {self.id} {self.name} {self.academic_year}>"
+
+
+class Student(Base, TimestampMixin):
+    __tablename__ = "students"
+    __table_args__ = (
+        CheckConstraint("length(trim(first_name)) > 0", name="first_name_not_blank"),
+        CheckConstraint("length(trim(last_name)) > 0", name="last_name_not_blank"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    admission_number: Mapped[str] = mapped_column(
+        String(40), unique=True, nullable=False, index=True
+    )
+    status: Mapped[StudentStatus] = mapped_column(
+        _pg_enum(StudentStatus, "student_status"),
+        nullable=False,
+        default=StudentStatus.ACTIVE,
+        server_default=StudentStatus.ACTIVE.value,
+    )
+
+    # RESTRICT rather than CASCADE: deleting a class or a parent must never
+    # silently take student and payment records with it.
+    class_id: Mapped[int | None] = mapped_column(
+        ForeignKey("classes.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+
+    school_class: Mapped[SchoolClass | None] = relationship(back_populates="students")
+    parent: Mapped[User | None] = relationship(back_populates="children", foreign_keys=[parent_id])
+    fee_assignments: Mapped[list[FeeAssignment]] = relationship(back_populates="student")
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+    def __repr__(self) -> str:
+        return f"<Student {self.id} {self.admission_number} {self.full_name}>"

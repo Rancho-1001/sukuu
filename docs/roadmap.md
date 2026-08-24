@@ -32,20 +32,20 @@ can be written or tested locally until it is.
 
 ## Phase 1 — Data model and migrations
 
-- [ ] Initialise Alembic and wire it to `DATABASE_URL`
-- [ ] SQLAlchemy declarative base, engine, and session dependency
-- [ ] `users` — email unique, password_hash, role enum, name
-- [ ] `classes` — name, academic_year
-- [ ] `students` — class_id, parent_id, admission_number unique, status
-- [ ] `fee_types` — name, default_amount, billing_period
-- [ ] `fee_assignments` — student_id, fee_type_id, amount, due_date, period_label
-- [ ] `payments` — fee_assignment_id, amount_paid, method, stripe ids, recorded_by
-- [ ] `audit_log` — user_id, action, target, timestamp
-- [ ] Every money column `NUMERIC(12,2)`, never float
-- [ ] CHECK constraints: amounts strictly positive
-- [ ] Indexes on every foreign key you will filter by
-- [ ] Generate the first migration, apply it, read the generated SQL
-- [ ] Seed script — 4 classes, ~25 students, uneven payment states
+- [x] Initialise Alembic and wire it to `DATABASE_URL`
+- [x] SQLAlchemy declarative base, engine, and session dependency
+- [x] `users` — email unique, password_hash, role enum, name
+- [x] `classes` — name, academic_year
+- [x] `students` — class_id, parent_id, admission_number unique, status
+- [x] `fee_types` — name, default_amount, billing_period
+- [x] `fee_assignments` — student_id, fee_type_id, amount, due_date, period_label
+- [x] `payments` — fee_assignment_id, amount_paid, method, stripe ids, recorded_by
+- [x] `audit_log` — user_id, action, target, timestamp
+- [x] Every money column `NUMERIC(12,2)`, never float
+- [x] CHECK constraints: amounts strictly positive
+- [x] Indexes on every foreign key you will filter by
+- [x] Generate the first migration, apply it, read the generated SQL
+- [x] Seed script — 4 classes, ~25 students, uneven payment states
 
 > Alembic autogenerate does not reliably notice CHECK constraints or enum changes.
 > Read every generated migration before applying it.
