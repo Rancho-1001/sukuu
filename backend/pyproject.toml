@@ -24,3 +24,5 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+# Alembic writes these; they are generated artifacts, not hand-maintained code.
+"app/db/migrations/versions/*" = ["E501"]
