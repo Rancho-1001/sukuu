@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import Select, select
+from sqlalchemy import Select
 from sqlalchemy.orm import joinedload
 
 from app.api.deps import AdminUser, DbSession, require_admin, require_staff
@@ -30,7 +30,7 @@ from app.schemas.fee_assignments import (
     FeeAssignmentCreate,
     FeeAssignmentOut,
 )
-from app.services import audit
+from app.services import audit, ledger
 from app.services.fee_assignments import bulk_assign
 from app.services.rate_limit import client_ip
 
@@ -38,8 +38,14 @@ router = APIRouter(prefix="/fee-assignments", tags=["fee assignments"])
 
 
 def _with_relations() -> Select:
-    """Assignments with the student and fee type needed to render them."""
-    return select(FeeAssignment).options(
+    """Assignments with their balance and the rows needed to render them.
+
+    Every read goes through ``ledger.assignments_with_paid``, so the amount
+    paid arrives in the same query as the assignment. Asking each row how much
+    has been paid against it is the N+1 the roadmap warns about, and it is the
+    one that hurts most here: this is the bursar's main list.
+    """
+    return ledger.assignments_with_paid().options(
         joinedload(FeeAssignment.student), joinedload(FeeAssignment.fee_type)
     )
 
@@ -57,7 +63,7 @@ def _resolve_fee_type(db: DbSession, fee_type_id: int) -> FeeType:
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_admin)],
 )
-def create_fee_assignment(payload: FeeAssignmentCreate, db: DbSession) -> FeeAssignment:
+def create_fee_assignment(payload: FeeAssignmentCreate, db: DbSession) -> FeeAssignmentOut:
     """Charge one student.
 
     Unlike the bulk route this will bill an inactive student, because doing so
@@ -78,7 +84,8 @@ def create_fee_assignment(payload: FeeAssignmentCreate, db: DbSession) -> FeeAss
     )
     db.add(assignment)
     commit_or_conflict(db)
-    return assignment
+    # Nothing can have been paid against a bill that did not exist a moment ago.
+    return FeeAssignmentOut.from_row(assignment, 0)
 
 
 # Declared before /{fee_assignment_id} so that "bulk" is not read as an id.
@@ -147,8 +154,13 @@ def list_fee_assignments(
     class_id: Annotated[int | None, Query()] = None,
     fee_type_id: Annotated[int | None, Query()] = None,
     period_label: Annotated[str | None, Query()] = None,
+    outstanding_only: Annotated[
+        bool, Query(description="Only fees with something still owed")
+    ] = False,
 ) -> Page[FeeAssignmentOut]:
     stmt = _with_relations()
+    if outstanding_only:
+        stmt = ledger.only_outstanding(stmt)
     if student_id is not None:
         stmt = stmt.where(FeeAssignment.student_id == student_id)
     if class_id is not None:
@@ -167,9 +179,9 @@ def list_fee_assignments(
     stmt = stmt.order_by(FeeAssignment.due_date.asc().nullslast(), FeeAssignment.id)
 
     total = count_of(db, stmt)
-    items = db.scalars(stmt.limit(page.limit).offset(page.offset)).all()
+    rows = db.execute(stmt.limit(page.limit).offset(page.offset)).all()
     return Page(
-        items=[FeeAssignmentOut.model_validate(item) for item in items],
+        items=[FeeAssignmentOut.from_row(assignment, paid) for assignment, paid in rows],
         total=total,
         limit=page.limit,
         offset=page.offset,
@@ -181,8 +193,8 @@ def list_fee_assignments(
     response_model=FeeAssignmentOut,
     dependencies=[Depends(require_staff)],
 )
-def read_fee_assignment(fee_assignment_id: int, db: DbSession) -> FeeAssignment:
-    assignment = db.scalar(_with_relations().where(FeeAssignment.id == fee_assignment_id))
-    if assignment is None:
+def read_fee_assignment(fee_assignment_id: int, db: DbSession) -> FeeAssignmentOut:
+    row = db.execute(_with_relations().where(FeeAssignment.id == fee_assignment_id)).first()
+    if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Fee assignment not found")
-    return assignment
+    return FeeAssignmentOut.from_row(*row)
