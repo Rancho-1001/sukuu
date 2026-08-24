@@ -5,6 +5,7 @@ which instantiates ``Settings()`` at module scope and would otherwise raise on a
 machine with no ``.env`` file — including CI.
 """
 
+import contextlib
 import os
 import pathlib
 
@@ -92,7 +93,7 @@ def db_session(engine):
 
 @pytest.fixture
 def client():
-    """A ``TestClient`` for the FastAPI app."""
+    """A ``TestClient`` for the FastAPI app, with no database wired in."""
     pytest.importorskip("fastapi", reason="FastAPI is not installed")
     from fastapi.testclient import TestClient
 
@@ -100,3 +101,77 @@ def client():
 
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def api(db_session):
+    """A ``TestClient`` whose requests run inside the test's transaction.
+
+    ``get_db`` is overridden to hand back the very session the test holds, so
+    rows created by a fixture are visible to the request and everything is
+    rolled back afterwards. The override yields without closing: closing here
+    would end the transaction the fixture still owns.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.db.session import get_db
+    from app.main import app
+
+    def override_get_db():
+        yield db_session
+
+    # The audit middleware runs after the route and would otherwise open its
+    # own connection, committing rows that outlive the test's rollback.
+    @contextlib.contextmanager
+    def audit_session_factory():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.state.audit_session_factory = audit_session_factory
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+        app.state.audit_session_factory = None
+
+
+@pytest.fixture
+def make_user(db_session):
+    """Create a user with a known password and return it."""
+    from app.core.security import hash_password
+    from app.models import User, UserRole
+
+    created = []
+
+    def _make(role: UserRole, email: str | None = None, password: str = "correct-horse"):
+        from uuid import uuid4
+
+        user = User(
+            email=email or f"{role.value}-{uuid4().hex[:8]}@example.com",
+            password_hash=hash_password(password),
+            name=f"Test {role.value}",
+            role=role,
+        )
+        db_session.add(user)
+        db_session.flush()
+        user.raw_password = password  # convenience for tests, not persisted
+        created.append(user)
+        return user
+
+    return _make
+
+
+@pytest.fixture
+def auth_headers(api):
+    """Log a user in and return the Authorization header for them."""
+
+    def _headers(user) -> dict[str, str]:
+        response = api.post(
+            "/auth/login",
+            data={"username": user.email, "password": user.raw_password},
+        )
+        assert response.status_code == 200, response.text
+        return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    return _headers

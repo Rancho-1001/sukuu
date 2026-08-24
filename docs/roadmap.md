@@ -59,15 +59,15 @@ can be written or tested locally until it is.
 Built before the endpoints, not after. Retrofitting authorisation is how permission
 bugs get in, and this is the part that carries the security story.
 
-- [ ] Password hashing with bcrypt, plus the 72-byte input guard
-- [ ] JWT issue and verify with PyJWT, including expiry
-- [ ] `POST /auth/login` and `GET /auth/me`
-- [ ] `get_current_user` dependency
-- [ ] `require_role(...)` guard covering admin / staff / parent
-- [ ] Parent scoping — a parent may only ever read their own children
-- [ ] Audit logging on every mutating request
-- [ ] Tests covering the full permission matrix, allow and deny
-- [ ] Test that parent A gets 403/404 on parent B's child
+- [x] Password hashing with bcrypt, plus the 72-byte input guard
+- [x] JWT issue and verify with PyJWT, including expiry
+- [x] `POST /auth/login` and `GET /auth/me`
+- [x] `get_current_user` dependency
+- [x] `require_role(...)` guard covering admin / staff / parent
+- [x] Parent scoping — a parent may only ever read their own children
+- [x] Audit logging on every mutating request
+- [x] Tests covering the full permission matrix, allow and deny
+- [x] Test that parent A gets 403/404 on parent B's child
 
 > Return 404 rather than 403 for records a user may not see. A 403 confirms the record
 > exists, which leaks the thing the guard is protecting.
