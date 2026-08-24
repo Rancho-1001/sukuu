@@ -222,3 +222,50 @@ class TestReferentialIntegrity:
         )
         with pytest.raises(IntegrityError, match="first_name_not_blank"):
             db_session.flush()
+
+
+class TestEmailNormalisation:
+    """Emails are stored lower-cased, enforced in two places.
+
+    Without this, a user created as "Ama@example.com" could never log in - the
+    login lookup lower-cases the input, so neither spelling matches - and the
+    same address could be registered twice in different cases.
+    """
+
+    def test_email_is_lowercased_on_write(self, db_session):
+        user = User(
+            email="Mixed.Case@Example.COM",
+            password_hash="x",
+            name="Mixed",
+            role=UserRole.PARENT,
+        )
+        db_session.add(user)
+        db_session.flush()
+        assert user.email == "mixed.case@example.com"
+
+    def test_surrounding_whitespace_is_stripped(self, db_session):
+        user = User(
+            email="  spaced@example.com  ", password_hash="x", name="S", role=UserRole.PARENT
+        )
+        db_session.add(user)
+        db_session.flush()
+        assert user.email == "spaced@example.com"
+
+    def test_the_same_address_cannot_be_registered_twice_in_different_cases(self, db_session):
+        address = unique("dup") + "@example.com"
+        for spelling in (address.upper(), address.lower()):
+            db_session.add(
+                User(email=spelling, password_hash="x", name="Dup", role=UserRole.PARENT)
+            )
+        with pytest.raises(IntegrityError, match="email"):
+            db_session.flush()
+
+    def test_raw_sql_cannot_insert_a_mixed_case_email(self, db_session):
+        """The validator is bypassable; the CHECK constraint is not."""
+        with pytest.raises(IntegrityError, match="email_is_lowercase"):
+            db_session.execute(
+                text(
+                    "INSERT INTO users (email, password_hash, name, role)"
+                    " VALUES ('RAW@Example.com', 'x', 'Raw', 'parent')"
+                )
+            )
