@@ -140,13 +140,19 @@ class AuditLog(Base):
 
     No TimestampMixin: an audit row is never updated, so an updated_at column
     would be a lie.
+
+    ``user_id`` is ON DELETE SET NULL, unlike every other foreign key here.
+    The log must never be the reason an account cannot be removed, and an entry
+    that has lost its actor still records that the action happened. Contrast
+    ``payments.recorded_by_id``, which stays RESTRICT: who accepted a cash
+    payment is accountability data and may not be erased.
     """
 
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     target: Mapped[str | None] = mapped_column(String(120), nullable=True)

@@ -14,10 +14,10 @@ import random
 from datetime import date, timedelta
 from decimal import Decimal
 
-import bcrypt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.security import hash_password
 from app.db.session import SessionLocal
 from app.models import (
     BillingPeriod,
@@ -83,10 +83,6 @@ LAST_NAMES = [
     "Agyeman",
     "Darko",
 ]
-
-
-def hash_password(raw: str) -> str:
-    return bcrypt.hashpw(raw.encode()[:72], bcrypt.gensalt()).decode()
 
 
 def already_seeded(session: Session) -> bool:

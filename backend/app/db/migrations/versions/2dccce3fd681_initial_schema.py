@@ -101,7 +101,7 @@ def upgrade() -> None:
             "timestamp", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
         ),
         sa.ForeignKeyConstraint(
-            ["user_id"], ["users.id"], name=op.f("fk_audit_log_user_id_users"), ondelete="RESTRICT"
+            ["user_id"], ["users.id"], name=op.f("fk_audit_log_user_id_users"), ondelete="SET NULL"
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_audit_log")),
     )
