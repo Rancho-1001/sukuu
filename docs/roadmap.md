@@ -82,20 +82,32 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 3 — Admin CRUD
 
-- [ ] Pydantic request and response schemas, separate from the models
-- [ ] Classes — create, list, update, archive
-- [ ] Students — create, list, update, assign to class and parent
-- [ ] Fee types — create, list, update
-- [ ] Fee assignments — assign to one student
-- [ ] Bulk assign a fee to a whole class in one transaction
-- [ ] Pagination and filtering on the list endpoints
-- [ ] Consistent error shape and validation messages
-- [ ] Tests for each resource, happy path and rejection
+- [x] Pydantic request and response schemas, separate from the models
+- [x] Classes — create, list, update, archive
+- [x] Students — create, list, update, assign to class and parent
+- [x] Fee types — create, list, update
+- [x] Fee assignments — assign to one student
+- [x] Bulk assign a fee to a whole class in one transaction
+- [x] Pagination and filtering on the list endpoints
+- [x] Consistent error shape and validation messages
+- [x] Tests for each resource, happy path and rejection
 
 > Watch the N+1 on any list showing a balance per student. With 25 seeded students it
 > looks fine, which is exactly why it survives to the demo.
 
-**Done when** an admin can set up a whole school through the API alone.
+> Each list endpoint has a test asserting its query count stays flat between a small
+> page and a large one. An N+1 is a count that tracks the result size, so comparing two
+> page sizes catches it without hard-coding a number that shifts whenever a route grows
+> a join.
+
+> `detail` is always a sentence; field errors arrive beside it under `errors`. Money
+> crosses the wire as a string — a JSON number is a double once a browser parses it.
+
+> No update or delete on fee assignments. The amount is what a student was billed and
+> payments point at it; changing it belongs with the locked payment service, not a CRUD
+> handler.
+
+**Done when** an admin can set up a whole school through the API alone. ✅
 
 ---
 
@@ -104,6 +116,7 @@ bugs get in, and this is the part that carries the security story.
 - [x] Pure money logic — outstanding, partial payments, overpayment rejection
 - [x] 31 unit tests over the money rules, including rounding and drift
 - [ ] Payment service that locks the fee assignment row before writing
+- [ ] Parent-scoped fee list per child — deferred from Phase 3, it belongs with balances
 - [ ] `POST /payments` for cash, restricted to staff and admin
 - [ ] Balance endpoints — per student, per class, per assignment
 - [ ] Fill in the concurrency test — two connections, one must lose
