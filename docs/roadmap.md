@@ -22,9 +22,9 @@ can be written or tested locally until it is.
 - [x] Install PostgreSQL 16 and start it
 - [x] Create the `sukuu` and `sukuu_test` databases and role
 - [x] Fill in `.env` with a real JWT secret (`openssl rand -hex 32`)
-- [ ] Create a Stripe account and copy the test-mode keys
-- [ ] Install the Stripe CLI for local webhook forwarding
-- [ ] Bump `actions/checkout` and `actions/setup-python` off deprecated Node 20
+- [x] Create a Stripe account and copy the test-mode keys (webhook secret still pending `stripe listen`)
+- [x] Install the Stripe CLI for local webhook forwarding
+- [x] Bump `actions/checkout` and `actions/setup-python` off deprecated Node 20
 
 **Done when** `pytest -m db` runs instead of skipping.
 
