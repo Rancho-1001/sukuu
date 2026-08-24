@@ -390,6 +390,9 @@ class TestAssignToAClass:
         assert entry.target == f"class:{school_class.id}"
         assert f"created={len(students)}" in entry.detail
         assert entry.user_id is not None
+        # The row an investigation actually reads should not be the one
+        # missing where the request came from.
+        assert entry.ip_address is not None
 
     @pytest.mark.parametrize("role", [UserRole.STAFF, UserRole.PARENT])
     def test_only_admins_may_bill_a_class(

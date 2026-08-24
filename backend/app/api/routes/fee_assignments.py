@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Select, select
 from sqlalchemy.orm import joinedload
 
@@ -32,6 +32,7 @@ from app.schemas.fee_assignments import (
 )
 from app.services import audit
 from app.services.fee_assignments import bulk_assign
+from app.services.rate_limit import client_ip
 
 router = APIRouter(prefix="/fee-assignments", tags=["fee assignments"])
 
@@ -83,7 +84,10 @@ def create_fee_assignment(payload: FeeAssignmentCreate, db: DbSession) -> FeeAss
 # Declared before /{fee_assignment_id} so that "bulk" is not read as an id.
 @router.post("/bulk", response_model=BulkFeeAssignmentResult)
 def create_bulk_fee_assignment(
-    payload: BulkFeeAssignmentCreate, db: DbSession, current_user: AdminUser
+    request: Request,
+    payload: BulkFeeAssignmentCreate,
+    db: DbSession,
+    current_user: AdminUser,
 ) -> BulkFeeAssignmentResult:
     """Charge every active student in a class, in one transaction.
 
@@ -108,7 +112,9 @@ def create_bulk_fee_assignment(
 
     # The audit middleware records "POST /fee-assignments/bulk status=200" for
     # free, which does not say how many students were billed or for how much.
-    # One request here charges a whole class; the detail is the point.
+    # One request here charges a whole class; the detail is the point. The
+    # address is carried over too - this is the row an investigation would
+    # actually read, and it should not be the one missing where it came from.
     audit.record(
         db,
         action="fee_assignment.bulk",
@@ -119,6 +125,7 @@ def create_bulk_fee_assignment(
             f"amount={result.amount} created={result.created} "
             f"skipped={len(result.skipped_student_ids)}"
         ),
+        ip_address=client_ip(request),
     )
     commit_or_conflict(db)
 
