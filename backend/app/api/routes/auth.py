@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
@@ -14,6 +14,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models import User
 from app.schemas.auth import Token, UserOut
 from app.services import audit
+from app.services.rate_limit import client_ip, enforce_login_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -24,23 +25,34 @@ _DUMMY_HASH = hash_password("timing-equalisation-placeholder")
 
 
 @router.post("/login", response_model=Token)
-def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DbSession) -> Token:
+def login(
+    request: Request,
+    form: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: DbSession,
+) -> Token:
     """Exchange email and password for a bearer token.
 
     Takes form encoding rather than JSON so the interactive docs' Authorize
     button works, which makes the API demonstrable without a frontend. The
     OAuth2 form calls the field ``username``; ours holds an email address.
     """
-    user = db.scalar(select(User).where(User.email == form.username.strip().lower()))
+    email = form.username.strip().lower()
+    ip = client_ip(request)
+
+    # Checked before the password is verified, so a throttled caller costs us a
+    # single indexed count rather than a bcrypt comparison.
+    enforce_login_rate_limit(db, email=email, ip=ip)
+
+    user = db.scalar(select(User).where(User.email == email))
 
     if user is None:
         verify_password(form.password, _DUMMY_HASH)
-        _fail(db, form.username)
+        _fail(db, email, ip=ip)
 
     if not verify_password(form.password, user.password_hash):
-        _fail(db, form.username, user_id=user.id)
+        _fail(db, email, ip=ip, user_id=user.id)
 
-    audit.record(db, action="auth.login", user_id=user.id, target=user.email)
+    audit.record(db, action="auth.login", user_id=user.id, target=user.email, ip_address=ip)
     db.commit()
 
     return Token(
@@ -49,14 +61,21 @@ def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DbSession) 
     )
 
 
-def _fail(db: DbSession, attempted: str, user_id: int | None = None) -> None:
-    """Record the attempt, then reject without saying which half was wrong."""
+def _fail(
+    db: DbSession, attempted: str, *, ip: str | None = None, user_id: int | None = None
+) -> None:
+    """Record the attempt, then reject without saying which half was wrong.
+
+    The row written here is what the rate limiter counts, so this must run on
+    every failure - including one for an email that does not exist.
+    """
     audit.record(
         db,
         action="auth.login_failed",
         user_id=user_id,
         target=attempted[:120],
         detail="bad credentials",
+        ip_address=ip,
     )
     db.commit()
     raise HTTPException(

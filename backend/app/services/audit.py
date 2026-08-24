@@ -19,6 +19,7 @@ from starlette.responses import Response
 
 from app.db.session import SessionLocal
 from app.models import AuditLog
+from app.services.rate_limit import client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,16 @@ def record(
     user_id: int | None = None,
     target: str | None = None,
     detail: str | None = None,
+    ip_address: str | None = None,
 ) -> AuditLog:
     """Append one audit row. The caller owns the commit."""
-    entry = AuditLog(user_id=user_id, action=action, target=target, detail=detail)
+    entry = AuditLog(
+        user_id=user_id,
+        action=action,
+        target=target,
+        detail=detail,
+        ip_address=ip_address,
+    )
     db.add(entry)
     return entry
 
@@ -73,6 +81,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     user_id=getattr(request.state, "user_id", None),
                     target=request.url.path,
                     detail=f"status={response.status_code}",
+                    ip_address=client_ip(request),
                 )
                 session.commit()
         except Exception:  # pragma: no cover - defensive

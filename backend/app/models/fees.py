@@ -155,7 +155,9 @@ class AuditLog(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     action: Mapped[str] = mapped_column(String(80), nullable=False)
-    target: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    # 45 chars covers an IPv6 address with an embedded IPv4 suffix.
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, index=True)
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
