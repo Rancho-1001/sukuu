@@ -29,7 +29,9 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+psycopg://sukuu:sukuu@localhost:5432/sukuu_test
-      JWT_SECRET: ci-secret-not-for-production
+      # 64 hex chars = 32 bytes, the RFC 7518 minimum for HS256. A shorter
+      # value makes PyJWT warn on every token, which buries real warnings.
+      JWT_SECRET: 0000000000000000000000000000000000000000000000000000000000000000
       STRIPE_SECRET_KEY: sk_test_dummy
       STRIPE_WEBHOOK_SECRET: whsec_dummy
 
