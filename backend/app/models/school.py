@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.db.base import Base, TimestampMixin
@@ -55,6 +63,12 @@ class SchoolClass(Base, TimestampMixin):
 
     Named SchoolClass because ``class`` is a Python keyword; the table stays
     ``classes`` as in the spec.
+
+    Classes are archived, never deleted. A class that has held students is
+    referenced by their records for as long as those records exist, and the
+    foreign key is RESTRICT precisely so a delete cannot take the history with
+    it. ``archived_at`` is what "Grade 5B, 2025" looks like once the year ends:
+    out of the pickers, still attached to everyone who was in it.
     """
 
     __tablename__ = "classes"
@@ -63,8 +77,13 @@ class SchoolClass(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
     academic_year: Mapped[str] = mapped_column(String(20), nullable=False)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     students: Mapped[list[Student]] = relationship(back_populates="school_class")
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
 
     def __repr__(self) -> str:
         return f"<SchoolClass {self.id} {self.name} {self.academic_year}>"
