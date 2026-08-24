@@ -13,6 +13,7 @@ from app.api.routes import (
     payments,
     reports,
     students,
+    users,
     webhooks,
 )
 from app.core.config import settings
@@ -46,6 +47,7 @@ app.include_router(checkout.router)
 app.include_router(webhooks.router)
 app.include_router(me.router)
 app.include_router(reports.router)
+app.include_router(users.router)
 
 
 @app.get("/health", tags=["meta"])
