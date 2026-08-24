@@ -96,3 +96,26 @@ class ClassBalanceOut(BaseModel):
     # class. A figure that silently reports only the current page is the kind
     # of wrong number a dashboard states with complete confidence.
     students: Page[StudentBalanceRow]
+
+
+class CheckoutSessionCreate(BaseModel):
+    """A parent choosing what to pay online.
+
+    ``amount`` is theirs to choose rather than fixed to the balance: paying a
+    term's fees in installments is the v1 feature this whole flow exists for.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    fee_assignment_id: int
+    amount: Money
+
+
+class CheckoutSessionOut(BaseModel):
+    """Where to send the payer. Nothing here records a payment - only the
+    webhook does that."""
+
+    session_id: str
+    checkout_url: str
+    fee_assignment_id: int
+    amount: Money

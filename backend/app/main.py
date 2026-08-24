@@ -5,11 +5,13 @@ from app.api.errors import register_error_handlers
 from app.api.routes import (
     auth,
     balances,
+    checkout,
     classes,
     fee_assignments,
     fee_types,
     payments,
     students,
+    webhooks,
 )
 from app.core.config import settings
 from app.services.audit import AuditMiddleware
@@ -38,6 +40,8 @@ app.include_router(students.router)
 app.include_router(fee_assignments.router)
 app.include_router(payments.router)
 app.include_router(balances.router)
+app.include_router(checkout.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/health", tags=["meta"])

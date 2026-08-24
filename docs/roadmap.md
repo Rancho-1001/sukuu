@@ -148,20 +148,40 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 5 — Stripe and installments
 
-- [ ] `POST /payments/checkout-session` for a chosen amount
-- [ ] Validate the requested amount against the balance before creating the session
-- [ ] `POST /webhooks/stripe` with signature verification
-- [ ] Payments recorded from the webhook, never from the browser redirect
-- [ ] Idempotency — store the Stripe event id with a unique constraint
-- [ ] Webhook path goes through the same locked payment service
-- [ ] End-to-end test locally with `stripe listen`
-- [ ] Tests with mocked Stripe payloads, including a replayed event
-- [ ] Handle failed and abandoned checkouts without leaving phantom rows
+- [x] `POST /payments/checkout-session` for a chosen amount
+- [x] Validate the requested amount against the balance before creating the session
+- [x] `POST /webhooks/stripe` with signature verification
+- [x] Payments recorded from the webhook, never from the browser redirect
+- [x] Idempotency — store the Stripe event id with a unique constraint
+- [x] Webhook path goes through the same locked payment service
+- [ ] **End-to-end test locally with `stripe listen`** — needs an interactive `stripe login`,
+      which also produces the real `whsec_` for `.env`. The only item here nobody else can do.
+- [x] Tests with mocked Stripe payloads, including a replayed event
+- [x] Handle failed and abandoned checkouts without leaving phantom rows
 
 > Verify the signature against the raw request body. FastAPI hands you parsed JSON, and
 > re-serialising changes the bytes, so the check fails for reasons that look unrelated.
 
-**Done when** killing the browser mid-payment still results in a correctly recorded payment.
+> Test signatures are generated with the real HMAC scheme rather than patching
+> `construct_event`. Mocking it out would leave the only security control on an
+> unauthenticated endpoint untested — including the tampered-body and stale-timestamp cases.
+
+> Answer 200 for anything final: an unhandled event type, a duplicate, a payment that
+> cannot be applied. Stripe retries non-2xx for days, which is right for "the database was
+> down" and wrong for everything else. The only 400 is a signature that does not verify.
+
+> An `IntegrityError` at the webhook's commit is only a duplicate if the constraint is
+> `stripe_event_id`. Treating any of them as one would answer "already recorded", stop the
+> retries, and lose the money behind a 200.
+
+> Money that arrives but cannot be applied — a bursar recorded cash mid-checkout — is not a
+> 409. The card is already charged and there is no smaller amount to retry, so it is audited
+> as `payment.stripe_needs_refund` for a human. Production would call Stripe's refund API.
+
+> Stripe does not operate in Ghana; test mode charges in USD. The transferable part is the
+> money rules and the reconciliation, not the processor — see the Paystack note in Phase 8.
+
+**Done when** killing the browser mid-payment still results in a correctly recorded payment. ✅
 
 ---
 
