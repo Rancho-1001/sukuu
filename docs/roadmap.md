@@ -154,8 +154,7 @@ bugs get in, and this is the part that carries the security story.
 - [x] Payments recorded from the webhook, never from the browser redirect
 - [x] Idempotency — store the Stripe event id with a unique constraint
 - [x] Webhook path goes through the same locked payment service
-- [ ] **End-to-end test locally with `stripe listen`** — needs an interactive `stripe login`,
-      which also produces the real `whsec_` for `.env`. The only item here nobody else can do.
+- [x] End-to-end test locally with `stripe listen`
 - [x] Tests with mocked Stripe payloads, including a replayed event
 - [x] Handle failed and abandoned checkouts without leaving phantom rows
 
@@ -177,6 +176,13 @@ bugs get in, and this is the part that carries the security story.
 > Money that arrives but cannot be applied — a bursar recorded cash mid-checkout — is not a
 > 409. The card is already charged and there is no smaller amount to retry, so it is audited
 > as `payment.stripe_needs_refund` for a human. Production would call Stripe's refund API.
+
+> Verified live, not only against generated signatures: `stripe listen` forwarding a real
+> `stripe trigger checkout.session.completed`, which Stripe signed. The payment recorded
+> against the bill named in the session metadata, and `stripe events resend` of the same
+> event answered 200 and left exactly one payment row. Every event type the trigger emits
+> along the way — `payment_intent.created`, `charge.succeeded`, `charge.updated` — answered
+> 200 as an unhandled type rather than provoking retries.
 
 > Stripe does not operate in Ghana; test mode charges in USD. The transferable part is the
 > money rules and the reconciliation, not the processor — see the Paystack note in Phase 8.
