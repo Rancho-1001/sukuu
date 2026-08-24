@@ -175,3 +175,175 @@ def auth_headers(api):
         return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
     return _headers
+
+
+@pytest.fixture
+def token_for(api, make_user):
+    """Mint a token for a fresh user of the given role."""
+
+    def _token(role):
+        user = make_user(role)
+        response = api.post(
+            "/auth/login", data={"username": user.email, "password": user.raw_password}
+        )
+        assert response.status_code == 200, response.text
+        return user, {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    return _token
+
+
+@pytest.fixture
+def headers_for(token_for):
+    """The Authorization header for a fresh user of the given role."""
+
+    def _headers(role) -> dict[str, str]:
+        return token_for(role)[1]
+
+    return _headers
+
+
+@pytest.fixture
+def admin_headers(headers_for):
+    from app.models import UserRole
+
+    return headers_for(UserRole.ADMIN)
+
+
+@pytest.fixture
+def staff_headers(headers_for):
+    from app.models import UserRole
+
+    return headers_for(UserRole.STAFF)
+
+
+@pytest.fixture
+def parent_headers(headers_for):
+    from app.models import UserRole
+
+    return headers_for(UserRole.PARENT)
+
+
+@pytest.fixture
+def make_class(db_session):
+    """A class, with a name unique enough not to collide with seed data."""
+    from uuid import uuid4
+
+    from app.models import SchoolClass
+
+    def _make(name: str | None = None, academic_year: str = "2026", archived_at=None):
+        school_class = SchoolClass(
+            name=name or f"Class {uuid4().hex[:8]}",
+            academic_year=academic_year,
+            archived_at=archived_at,
+        )
+        db_session.add(school_class)
+        db_session.flush()
+        return school_class
+
+    return _make
+
+
+@pytest.fixture
+def make_fee_type(db_session):
+    from uuid import uuid4
+
+    from app.models import BillingPeriod, FeeType
+
+    def _make(
+        name: str | None = None,
+        default_amount: str = "250.00",
+        billing_period: BillingPeriod = BillingPeriod.TERM,
+        description: str | None = None,
+    ):
+        from decimal import Decimal
+
+        fee_type = FeeType(
+            name=name or f"Fee {uuid4().hex[:8]}",
+            default_amount=Decimal(default_amount),
+            billing_period=billing_period,
+            description=description,
+        )
+        db_session.add(fee_type)
+        db_session.flush()
+        return fee_type
+
+    return _make
+
+
+@pytest.fixture
+def make_student(db_session):
+    from uuid import uuid4
+
+    from app.models import Student, StudentStatus
+
+    def _make(
+        first_name: str = "Ama",
+        last_name: str = "Mensah",
+        admission_number: str | None = None,
+        school_class=None,
+        parent=None,
+        status: StudentStatus = StudentStatus.ACTIVE,
+    ):
+        student = Student(
+            first_name=first_name,
+            last_name=last_name,
+            admission_number=admission_number or uuid4().hex[:12],
+            school_class=school_class,
+            parent=parent,
+            status=status,
+        )
+        db_session.add(student)
+        db_session.flush()
+        return student
+
+    return _make
+
+
+@pytest.fixture
+def query_counter(engine):
+    """Count the SQL statements a block of code issues.
+
+    The point is not the absolute number - that shifts when a route grows a
+    join - but that it stays *flat* as rows are added. An N+1 is precisely a
+    count that tracks the size of the result set, so the tests compare a
+    one-row page against a many-row page rather than asserting a magic number.
+    """
+    import contextlib
+
+    from sqlalchemy import event
+
+    @contextlib.contextmanager
+    def _counter():
+        statements: list[str] = []
+
+        def before(_conn, _cursor, statement, _params, _context, _executemany):
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", before)
+        try:
+            yield statements
+        finally:
+            event.remove(engine, "before_cursor_execute", before)
+
+    return _counter
+
+
+@pytest.fixture
+def make_fee_assignment(db_session):
+    from decimal import Decimal
+
+    from app.models import FeeAssignment
+
+    def _make(student, fee_type, amount=None, period_label="Term 1 2026", due_date=None):
+        assignment = FeeAssignment(
+            student=student,
+            fee_type=fee_type,
+            amount=Decimal(amount) if amount is not None else fee_type.default_amount,
+            period_label=period_label,
+            due_date=due_date,
+        )
+        db_session.add(assignment)
+        db_session.flush()
+        return assignment
+
+    return _make

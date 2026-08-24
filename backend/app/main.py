@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
-from app.api.routes import auth
+from app.api.routes import auth, classes, fee_types
 from app.core.config import settings
 from app.services.audit import AuditMiddleware
 
@@ -24,6 +24,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(classes.router)
+app.include_router(fee_types.router)
 
 
 @app.get("/health", tags=["meta"])

@@ -61,21 +61,6 @@ def guarded_api(db_session):
         yield client
 
 
-@pytest.fixture
-def token_for(api, make_user):
-    """Mint a token for a fresh user of the given role."""
-
-    def _token(role: UserRole):
-        user = make_user(role)
-        response = api.post(
-            "/auth/login", data={"username": user.email, "password": user.raw_password}
-        )
-        assert response.status_code == 200, response.text
-        return user, {"Authorization": f"Bearer {response.json()['access_token']}"}
-
-    return _token
-
-
 ALL_ROLES = [UserRole.ADMIN, UserRole.STAFF, UserRole.PARENT]
 
 
