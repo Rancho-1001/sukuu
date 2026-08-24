@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* One place for the things every screen shares. Everything else is utilities
+   on the element that needs them - the point of Tailwind is that there is no
+   second file to keep in sync. */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  background-color: var(--color-slate-50);
+}
+
+/* A visible focus ring everywhere, rather than only where someone remembered.
+   Keyboard users are the ones this application is worst for otherwise: it is
+   mostly tables and forms. */
+:focus-visible {
+  outline: 2px solid var(--color-indigo-600);
+  outline-offset: 2px;
+}
