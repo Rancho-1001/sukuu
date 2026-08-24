@@ -6,10 +6,9 @@ One function, but it earns a module: getting LIKE escaping wrong is quiet.
 from __future__ import annotations
 
 from sqlalchemy import ColumnElement
-from sqlalchemy.orm import InstrumentedAttribute
 
 
-def contains(column: InstrumentedAttribute, term: str) -> ColumnElement[bool]:
+def contains(column: ColumnElement[str], term: str) -> ColumnElement[bool]:
     """Case-insensitive "contains" over ``column``.
 
     ``%`` and ``_`` are wildcards inside a LIKE pattern, so a search for
