@@ -9,6 +9,7 @@ silently dropped, so each one gets a test that tries to violate it.
 from __future__ import annotations
 
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import text
@@ -29,15 +30,31 @@ from app.models import (
 pytestmark = pytest.mark.db
 
 
-def make_fee_type(session, name="Tuition", amount="500.00"):
-    ft = FeeType(name=name, default_amount=Decimal(amount), billing_period=BillingPeriod.TERM)
+def unique(prefix: str) -> str:
+    """A value no other test and no seed data can collide with.
+
+    These tests must pass against a database that already holds rows - a
+    developer who seeded their test database should not see failures that look
+    like constraint bugs.
+    """
+    return f"{prefix}-{uuid4().hex[:10]}"
+
+
+def make_fee_type(session, name=None, amount="500.00"):
+    ft = FeeType(
+        name=name or unique("Fee"),
+        default_amount=Decimal(amount),
+        billing_period=BillingPeriod.TERM,
+    )
     session.add(ft)
     session.flush()
     return ft
 
 
-def make_student(session, admission="ADM-001"):
-    student = Student(first_name="Ama", last_name="Mensah", admission_number=admission)
+def make_student(session, admission=None):
+    student = Student(
+        first_name="Ama", last_name="Mensah", admission_number=admission or unique("ADM")
+    )
     session.add(student)
     session.flush()
     return student
@@ -96,15 +113,17 @@ class TestPositiveAmounts:
 
 class TestUniqueness:
     def test_admission_number_must_be_unique(self, db_session):
-        make_student(db_session, admission="ADM-DUP")
+        dup = unique("ADM")
+        make_student(db_session, admission=dup)
         with pytest.raises(IntegrityError, match="admission_number"):
-            make_student(db_session, admission="ADM-DUP")
+            make_student(db_session, admission=dup)
 
     def test_email_must_be_unique(self, db_session):
+        shared_email = unique("dup") + "@example.com"
         for _ in range(2):
             db_session.add(
                 User(
-                    email="dup@example.com",
+                    email=shared_email,
                     password_hash="x",
                     name="Dup",
                     role=UserRole.PARENT,
@@ -114,21 +133,22 @@ class TestUniqueness:
             db_session.flush()
 
     def test_same_fee_cannot_be_charged_twice_for_one_period(self, db_session):
-        student = make_student(db_session, admission="ADM-002")
-        fee_type = make_fee_type(db_session, name="Feeding")
+        student = make_student(db_session, admission=unique("ADM"))
+        fee_type = make_fee_type(db_session)
         make_assignment(db_session, student=student, fee_type=fee_type, period="Term 1 2026")
         with pytest.raises(IntegrityError, match="student_fee_period"):
             make_assignment(db_session, student=student, fee_type=fee_type, period="Term 1 2026")
 
     def test_the_same_fee_in_a_different_period_is_fine(self, db_session):
-        student = make_student(db_session, admission="ADM-003")
-        fee_type = make_fee_type(db_session, name="Uniform")
+        student = make_student(db_session, admission=unique("ADM"))
+        fee_type = make_fee_type(db_session)
         make_assignment(db_session, student=student, fee_type=fee_type, period="Term 1 2026")
         make_assignment(db_session, student=student, fee_type=fee_type, period="Term 2 2026")
 
     def test_a_stripe_event_can_only_be_recorded_once(self, db_session):
         """The guarantee that makes a replayed webhook a no-op."""
         fa = make_assignment(db_session)
+        shared_event = unique("evt")
         for _ in range(2):
             db_session.add(
                 Payment(
@@ -136,7 +156,7 @@ class TestUniqueness:
                     amount_paid=Decimal("10.00"),
                     method=PaymentMethod.STRIPE,
                     stripe_payment_intent_id="pi_123",
-                    stripe_event_id="evt_replayed",
+                    stripe_event_id=shared_event,
                 )
             )
         with pytest.raises(IntegrityError, match="stripe_event_id"):
@@ -184,10 +204,10 @@ class TestReferentialIntegrity:
         through the ORM would test SQLAlchemy's cascade behaviour rather than
         the constraint this test exists to prove.
         """
-        school_class = SchoolClass(name="Grade 5B", academic_year="2026")
+        school_class = SchoolClass(name=unique("Grade"), academic_year="2026")
         db_session.add(school_class)
         db_session.flush()
-        student = make_student(db_session, admission="ADM-004")
+        student = make_student(db_session, admission=unique("ADM"))
         student.school_class = school_class
         db_session.flush()
 
@@ -197,6 +217,8 @@ class TestReferentialIntegrity:
             )
 
     def test_blank_student_name_is_rejected(self, db_session):
-        db_session.add(Student(first_name="   ", last_name="Mensah", admission_number="ADM-005"))
+        db_session.add(
+            Student(first_name="   ", last_name="Mensah", admission_number=unique("ADM"))
+        )
         with pytest.raises(IntegrityError, match="first_name_not_blank"):
             db_session.flush()

@@ -62,9 +62,14 @@ jobs:
           alembic downgrade base
 
       - name: Seed script runs
+        # Reset afterwards so the test run starts from an empty schema. The
+        # tests are written not to care either way, but leaving seed rows in
+        # place would quietly change what they exercise.
         run: |
           alembic upgrade head
           python -m app.db.seed
+          alembic downgrade base
+          alembic upgrade head
 
       - name: Test
         run: pytest --cov --cov-report=term-missing
