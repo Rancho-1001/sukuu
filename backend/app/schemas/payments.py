@@ -119,3 +119,27 @@ class CheckoutSessionOut(BaseModel):
     checkout_url: str
     fee_assignment_id: int
     amount: Money
+
+
+class ClassCollectionRow(BaseModel):
+    """One class's line on the admin dashboard."""
+
+    school_class: ClassSummary
+    billed: MoneyTotal
+    paid: MoneyTotal
+    outstanding: MoneyTotal
+
+
+class SchoolSummaryOut(BaseModel):
+    """Collected and outstanding across the school.
+
+    ``classes`` will not always sum to the totals above it: a student enrolled
+    but not yet placed in a class is billed like anyone else and counts toward
+    the school figure while having no class row to appear in. That gap is
+    information, not drift.
+    """
+
+    billed: MoneyTotal
+    paid: MoneyTotal
+    outstanding: MoneyTotal
+    classes: list[ClassCollectionRow]

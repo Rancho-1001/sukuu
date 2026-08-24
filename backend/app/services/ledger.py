@@ -40,7 +40,7 @@ from decimal import Decimal
 from sqlalchemy import ColumnElement, Select, Subquery, func, select
 from sqlalchemy.orm import Session
 
-from app.models import FeeAssignment, Payment, Student
+from app.models import FeeAssignment, Payment, SchoolClass, Student
 
 
 def _paid_per_assignment() -> Subquery:
@@ -104,6 +104,27 @@ def student_balances() -> Select:
         .outerjoin(FeeAssignment, FeeAssignment.student_id == Student.id)
         .outerjoin(paid, paid.c.fee_assignment_id == FeeAssignment.id)
         .group_by(Student.id)
+    )
+
+
+def class_balances() -> Select:
+    """Every class with what its students have been billed and have paid.
+
+    Three joins deep - class to student to assignment to payments - and the
+    payments are still collapsed first, so a student paying in installments
+    inflates neither their class's billed figure nor the school's.
+    """
+    paid = _paid_per_assignment()
+    return (
+        select(
+            SchoolClass,
+            func.coalesce(func.sum(FeeAssignment.amount), 0).label("billed"),
+            func.coalesce(func.sum(paid.c.paid), 0).label("paid"),
+        )
+        .outerjoin(Student, Student.class_id == SchoolClass.id)
+        .outerjoin(FeeAssignment, FeeAssignment.student_id == Student.id)
+        .outerjoin(paid, paid.c.fee_assignment_id == FeeAssignment.id)
+        .group_by(SchoolClass.id)
     )
 
 

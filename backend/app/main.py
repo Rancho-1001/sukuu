@@ -9,7 +9,9 @@ from app.api.routes import (
     classes,
     fee_assignments,
     fee_types,
+    me,
     payments,
+    reports,
     students,
     webhooks,
 )
@@ -42,6 +44,8 @@ app.include_router(payments.router)
 app.include_router(balances.router)
 app.include_router(checkout.router)
 app.include_router(webhooks.router)
+app.include_router(me.router)
+app.include_router(reports.router)
 
 
 @app.get("/health", tags=["meta"])
