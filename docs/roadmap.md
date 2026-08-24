@@ -115,17 +115,34 @@ bugs get in, and this is the part that carries the security story.
 
 - [x] Pure money logic — outstanding, partial payments, overpayment rejection
 - [x] 31 unit tests over the money rules, including rounding and drift
-- [ ] Payment service that locks the fee assignment row before writing
-- [ ] Parent-scoped fee list per child — deferred from Phase 3, it belongs with balances
-- [ ] `POST /payments` for cash, restricted to staff and admin
-- [ ] Balance endpoints — per student, per class, per assignment
-- [ ] Fill in the concurrency test — two connections, one must lose
-- [ ] Every payment records who logged it
+- [x] Payment service that locks the fee assignment row before writing
+- [x] Parent-scoped fee list per child — deferred from Phase 3, it belongs with balances
+- [x] `POST /payments` for cash, restricted to staff and admin
+- [x] Balance endpoints — per student, per class, per assignment
+- [x] Fill in the concurrency test — two connections, one must lose
+- [x] Every payment records who logged it
 
 > A concurrency test that runs both payments through one session passes whether or not
 > the lock exists. It needs two independent connections.
 
-**Done when** the sum of payments can never exceed the fee amount, and you can show why under load.
+> The lock goes on the fee assignment, not the payments. The dangerous write is a *new*
+> row, and a row that does not exist yet cannot be locked. Existing payments are read
+> **after** the lock is taken — a total gathered before the wait is a total from before
+> the other transaction committed.
+
+> Totalling billed and paid across students → assignments → payments fans out: each bill
+> counts once per payment against it. It agrees with a hand-check for everyone who paid
+> in one go and is wrong only for installments, which is the feature the product is built
+> around. Payments are collapsed to one row per assignment in a subquery first.
+
+> Both defences were verified by breaking them: with `.with_for_update()` removed the
+> concurrency test fails, and with the naive join the class total reads 600.00 instead of
+> 300.00. A test that passes either way is not a test.
+
+> `POST /payments` takes no `method` from the client. Staff filing a payment as "stripe"
+> with no Stripe transaction behind it is the one lie this ledger must not be able to tell.
+
+**Done when** the sum of payments can never exceed the fee amount, and you can show why under load. ✅
 
 ---
 

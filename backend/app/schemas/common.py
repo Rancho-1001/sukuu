@@ -26,6 +26,16 @@ Money = Annotated[
 ]
 
 
+# A sum or a balance, as opposed to a charge. Zero is a legitimate value here -
+# a settled fee, a student with nothing billed yet - so this is ge rather than
+# gt, and it carries no max_digits because it is computed rather than stored.
+MoneyTotal = Annotated[
+    Decimal,
+    Field(ge=0, decimal_places=2, examples=["0.00"]),
+    PlainSerializer(lambda value: f"{value:.2f}", return_type=str),
+]
+
+
 def Name(max_length: int) -> type[str]:  # noqa: N802 - reads as a type, used as one
     """A required, trimmed, non-empty string.
 

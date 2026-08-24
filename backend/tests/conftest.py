@@ -347,3 +347,26 @@ def make_fee_assignment(db_session):
         return assignment
 
     return _make
+
+
+@pytest.fixture
+def make_payment(db_session):
+    """Record a payment through the real service, lock and all."""
+    from decimal import Decimal
+
+    from app.models import PaymentMethod
+    from app.services.payments import record_payment
+
+    def _make(assignment, amount, recorded_by=None, method=PaymentMethod.CASH, **kwargs):
+        payment = record_payment(
+            db_session,
+            fee_assignment_id=assignment.id,
+            amount=Decimal(str(amount)),
+            method=method,
+            recorded_by_id=recorded_by.id if recorded_by is not None else None,
+            **kwargs,
+        )
+        db_session.flush()
+        return payment
+
+    return _make

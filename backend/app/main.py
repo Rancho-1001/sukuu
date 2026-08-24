@@ -2,7 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
-from app.api.routes import auth, classes, fee_assignments, fee_types, students
+from app.api.routes import (
+    auth,
+    balances,
+    classes,
+    fee_assignments,
+    fee_types,
+    payments,
+    students,
+)
 from app.core.config import settings
 from app.services.audit import AuditMiddleware
 
@@ -28,6 +36,8 @@ app.include_router(classes.router)
 app.include_router(fee_types.router)
 app.include_router(students.router)
 app.include_router(fee_assignments.router)
+app.include_router(payments.router)
+app.include_router(balances.router)
 
 
 @app.get("/health", tags=["meta"])

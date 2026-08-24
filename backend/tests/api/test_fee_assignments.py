@@ -533,3 +533,135 @@ class TestRead:
         assert response.status_code == 422
         fields = {error["field"] for error in response.json()["errors"]}
         assert fields == {"class_id", "fee_type_id", "period_label"}
+
+
+class TestTheBalanceOnAnAssignment:
+    """The per-assignment balance, carried on the record it belongs to."""
+
+    @pytest.fixture
+    def assignment(self, make_student, make_fee_type, make_fee_assignment):
+        return make_fee_assignment(
+            make_student(), make_fee_type(default_amount="100.00"), amount="100.00"
+        )
+
+    def test_an_untouched_fee_owes_all_of_it(self, api, admin_headers, assignment):
+        body = api.get(f"/fee-assignments/{assignment.id}", headers=admin_headers).json()
+        assert body["amount"] == "100.00"
+        assert body["amount_paid"] == "0.00"
+        assert body["outstanding"] == "100.00"
+        assert body["settled"] is False
+
+    def test_a_partial_payment_moves_the_balance(
+        self, api, admin_headers, assignment, make_payment
+    ):
+        make_payment(assignment, "40.00")
+        body = api.get(f"/fee-assignments/{assignment.id}", headers=admin_headers).json()
+        assert body["amount_paid"] == "40.00"
+        assert body["outstanding"] == "60.00"
+        assert body["settled"] is False
+
+    def test_installments_accumulate_without_inflating_the_amount(
+        self, api, admin_headers, assignment, make_payment
+    ):
+        """Three installments settling one bill exactly.
+
+        This route cannot fan out - it joins payments already collapsed to one
+        row per assignment - so this checks the accumulation, not the join.
+        The fan-out itself is tested where the risk actually is, against the
+        student and class totals in test_balances_api.py."""
+        for part in ("30.00", "30.00", "40.00"):
+            make_payment(assignment, part)
+
+        body = api.get(f"/fee-assignments/{assignment.id}", headers=admin_headers).json()
+        assert body["amount"] == "100.00"
+        assert body["amount_paid"] == "100.00"
+        assert body["outstanding"] == "0.00"
+        assert body["settled"] is True
+
+    def test_the_list_carries_balances_too(self, api, admin_headers, assignment, make_payment):
+        make_payment(assignment, "25.00")
+        body = api.get(
+            f"/fee-assignments?student_id={assignment.student_id}", headers=admin_headers
+        ).json()
+        assert body["items"][0]["outstanding"] == "75.00"
+
+    def test_filtering_to_what_is_still_owed(
+        self,
+        api,
+        admin_headers,
+        make_class,
+        make_student,
+        make_fee_type,
+        make_fee_assignment,
+        make_payment,
+    ):
+        """The bursar's actual question."""
+        school_class = make_class()
+        fee_type = make_fee_type(default_amount="100.00")
+        settled = make_fee_assignment(
+            make_student(school_class=school_class), fee_type, amount="100.00"
+        )
+        make_payment(settled, "100.00")
+        still_owing = make_fee_assignment(
+            make_student(school_class=school_class), fee_type, amount="100.00"
+        )
+        make_payment(still_owing, "99.99")
+        untouched = make_fee_assignment(
+            make_student(school_class=school_class), fee_type, amount="100.00"
+        )
+
+        body = api.get(
+            f"/fee-assignments?class_id={school_class.id}&outstanding_only=true",
+            headers=admin_headers,
+        ).json()
+        assert {item["id"] for item in body["items"]} == {still_owing.id, untouched.id}
+        assert body["total"] == 2
+
+    def test_a_new_assignment_starts_unpaid(self, api, admin_headers, make_student, make_fee_type):
+        body = api.post(
+            "/fee-assignments",
+            json={
+                "student_id": make_student().id,
+                "fee_type_id": make_fee_type(default_amount="75.00").id,
+                "period_label": a_period(),
+            },
+            headers=admin_headers,
+        ).json()
+        assert body["amount_paid"] == "0.00"
+        assert body["outstanding"] == "75.00"
+
+    def test_the_query_count_does_not_grow_when_payments_do(
+        self,
+        api,
+        admin_headers,
+        make_class,
+        make_student,
+        make_fee_type,
+        make_fee_assignment,
+        make_payment,
+        query_counter,
+    ):
+        """Balances must arrive in the same query as the rows. Asking each
+        assignment what it has collected is the N+1 that hurts most: this is
+        the bursar's main list."""
+        quiet, busy = make_class(), make_class()
+        fee_type = make_fee_type(default_amount="100.00")
+        make_payment(
+            make_fee_assignment(make_student(school_class=quiet), fee_type, amount="100.00"),
+            "10.00",
+        )
+        for _ in range(5):
+            assignment = make_fee_assignment(
+                make_student(school_class=busy), fee_type, amount="100.00"
+            )
+            for part in ("10.00", "10.00", "10.00"):
+                make_payment(assignment, part)
+
+        api.get("/fee-assignments?limit=1", headers=admin_headers)
+
+        with query_counter() as small:
+            api.get(f"/fee-assignments?class_id={quiet.id}", headers=admin_headers)
+        with query_counter() as large:
+            api.get(f"/fee-assignments?class_id={busy.id}", headers=admin_headers)
+
+        assert len(small) == len(large)

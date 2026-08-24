@@ -4,12 +4,17 @@ much for this fee, this period"."""
 from __future__ import annotations
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from app.schemas.common import Money, Name
+from app.schemas.common import Money, MoneyTotal, Name
 from app.schemas.fee_types import FeeTypeSummary
 from app.schemas.students import StudentSummary
+from app.services.balances import is_settled, outstanding, to_money
+
+if TYPE_CHECKING:
+    from app.models import FeeAssignment
 
 
 class FeeAssignmentCreate(BaseModel):
@@ -36,14 +41,47 @@ class BulkFeeAssignmentCreate(BaseModel):
 
 
 class FeeAssignmentOut(BaseModel):
+    """One bill, with where it stands.
+
+    ``amount`` is what was charged, ``amount_paid`` what has come in against
+    it, and ``outstanding`` the difference - which is the per-assignment
+    balance the roadmap asks for, on the record it belongs to rather than at a
+    separate endpoint a client has to correlate by hand.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     amount: Money
+    amount_paid: MoneyTotal
+    outstanding: MoneyTotal
+    settled: bool
     due_date: date | None = None
     period_label: str
     student: StudentSummary
     fee_type: FeeTypeSummary
+
+    @classmethod
+    def from_row(cls, assignment: FeeAssignment, amount_paid: object) -> FeeAssignmentOut:
+        """Build from an ``(assignment, amount_paid)`` row.
+
+        The derived figures go through :mod:`app.services.balances` rather than
+        being subtracted here, so the rule that a balance never reads negative
+        has exactly one definition. Passing the already-summed total as a
+        one-element list is what lets that pure function do the work unchanged.
+        """
+        paid = to_money(amount_paid)
+        return cls(
+            id=assignment.id,
+            amount=assignment.amount,
+            amount_paid=paid,
+            outstanding=outstanding(assignment.amount, [paid]),
+            settled=is_settled(assignment.amount, [paid]),
+            due_date=assignment.due_date,
+            period_label=assignment.period_label,
+            student=StudentSummary.model_validate(assignment.student),
+            fee_type=FeeTypeSummary.model_validate(assignment.fee_type),
+        )
 
 
 class BulkFeeAssignmentResult(BaseModel):
