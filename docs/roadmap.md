@@ -193,6 +193,9 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 6 — Frontend
 
+- [x] Two endpoints the frontend needed and the API did not have:
+      `GET /me/children` (a parent had no way to discover their own children) and
+      `GET /reports/summary` (per-class totals in one query, not an N+1 in the browser)
 - [ ] Scaffold React + Vite with TypeScript
 - [ ] API client with token attachment and 401 handling
 - [ ] Auth context, login page, protected routes
