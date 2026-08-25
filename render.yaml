@@ -1,0 +1,55 @@
+# Render blueprint for the Sukuu API.
+#
+# The database is not declared here on purpose: Postgres is Supabase, so Render
+# only runs the web service and is told where the database lives through
+# DATABASE_URL. That split is also what keeps Render's free tier from being a
+# problem - a free Render Postgres expires after 30 days and is then deleted,
+# which is exactly the "empty demo the week someone looks" the roadmap warns
+# about.
+services:
+  - type: web
+    name: sukuu-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    # uv is what the project uses locally; pip install from the same pinned
+    # requirements keeps the deployed set identical to the tested one.
+    buildCommand: pip install -r requirements.txt
+    # Migrations run here, not in the build. A build can run for a preview or
+    # be retried; a release runs once, after a successful build, before any
+    # traffic reaches the new version. Running `alembic upgrade head` in the
+    # build step would migrate whatever database the build happened to point
+    # at, which for a preview is the production one.
+    preDeployCommand: alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # Supabase. Use the *session* pooler connection string, not the
+      # transaction one: this is a long-lived process with SQLAlchemy's own
+      # pool, and session mode behaves like a direct connection - which is what
+      # SELECT ... FOR UPDATE and psycopg's prepared statements both want.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # The deployed frontend's origin. Comma-separated if more than one.
+      # The API refuses to start if this is a wildcard.
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # From the Stripe dashboard endpoint, NOT from `stripe listen` - they are
+      # different secrets and the local one will not verify a real delivery.
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_SUCCESS_URL
+        sync: false
+      - key: STRIPE_CANCEL_URL
+        sync: false
+      # Render terminates TLS and sets X-Forwarded-For. Without this the login
+      # rate limiter sees the proxy's address for every request and throttles
+      # the whole world together.
+      - key: TRUST_PROXY_HEADERS
+        value: "true"
+      - key: PYTHON_VERSION
+        value: "3.14"

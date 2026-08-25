@@ -241,18 +241,40 @@ bugs get in, and this is the part that carries the security story.
 
 ## Phase 7 — Deploy
 
-- [ ] Confirm the host offers Python 3.14, or drop to 3.13
-- [ ] Managed Postgres provisioned
-- [ ] Backend deployed with env vars set and migrations run on release
-- [ ] Frontend deployed to Vercel, pointed at the live API
-- [ ] CORS locked to the production origin, not `*`
-- [ ] Stripe webhook endpoint registered against the deployed URL
-- [ ] Demo data seeded, with one login per role
+Vercel (frontend) + Render (API) + Supabase (Postgres). Runbook in [deploy.md](deploy.md).
+
+- [x] Confirm the host offers Python 3.14, or drop to 3.13 — both hosts default to 3.14
+- [x] CORS locked to the production origin, not `*` — the API refuses to start on a wildcard
+- [x] Confirm no secret was ever committed; rotate anything that leaked — history is clean
+- [x] Deploy configuration written: `render.yaml`, `frontend/vercel.json`, `.python-version`
+- [ ] Managed Postgres provisioned — **needs a Supabase account**
+- [ ] Backend deployed with env vars set and migrations run on release — **needs a Render account**
+- [ ] Frontend deployed to Vercel, pointed at the live API — **needs a Vercel account**
+- [ ] Stripe webhook endpoint registered against the deployed URL — a *different* `whsec_`
+      from the one `stripe listen` prints
+- [ ] Demo data seeded, with one login per role — run from a laptop; free Render has no shell
 - [ ] Smoke test the full loop in production, including a card payment
-- [ ] Confirm no secret was ever committed; rotate anything that leaked
 
 > Demo accounts that let a stranger delete the data leave you with an empty demo the week
 > someone actually looks. Reseed on a schedule, or make the public logins read-mostly.
+
+> Nothing to worry about on that front, as it turns out: there is not a single DELETE
+> endpoint in this API. Classes archive, students go inactive, fee types cannot be removed.
+> A visitor can add noise but cannot destroy anything.
+
+> Postgres is Supabase rather than Render because a free Render Postgres **expires after 30
+> days** and is then deleted — precisely the failure the note above describes.
+
+> Use Supabase's **session** pooler, not the transaction one. This is a long-lived process
+> with its own connection pool, and session mode behaves like a direct connection — which is
+> what `SELECT … FOR UPDATE` and psycopg's prepared statements both need.
+
+> Migrations run as Render's `preDeployCommand`, never in the build step. A build can run
+> for a preview or be retried, and would migrate whatever database it happened to point at.
+
+> Free Render instances sleep after 15 quiet minutes and take about a minute to wake. The
+> login page says so rather than showing a spinner. A Stripe webhook that times out against
+> a sleeping service gets retried and lands, because it is idempotent on `stripe_event_id`.
 
 **Done when** a stranger with the URL can log in as all three roles and pay a fee.
 
