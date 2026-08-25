@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/context";
@@ -20,6 +20,15 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The demo API sleeps after fifteen quiet minutes and takes about a minute to
+  // wake. Without a word about it, the first visitor of the day watches a
+  // spinner and concludes the thing is broken.
+  const [slow, setSlow] = useState(false);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (slowTimer.current) clearTimeout(slowTimer.current);
+  }, []);
 
   if (user) return <Navigate to={homeFor(user.role)} replace />;
 
@@ -27,6 +36,7 @@ export function LoginPage() {
     event.preventDefault();
     setError(null);
     setBusy(true);
+    slowTimer.current = setTimeout(() => setSlow(true), 3000);
     try {
       await signIn(email, password);
       const from = (location.state as { from?: string } | null)?.from;
@@ -38,6 +48,8 @@ export function LoginPage() {
       // keep guessing.
       setError(caught instanceof ApiError ? caught.message : "Could not sign in. Try again.");
     } finally {
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      setSlow(false);
       setBusy(false);
     }
   }
@@ -79,6 +91,13 @@ export function LoginPage() {
           <Button type="submit" className="w-full" disabled={busy}>
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+
+          {slow ? (
+            <p role="status" className="text-center text-sm text-slate-500">
+              The demo server sleeps when nobody is using it. Waking it up — this can
+              take up to a minute.
+            </p>
+          ) : null}
         </form>
 
         <div className="mt-6 rounded-lg border border-slate-200 bg-white/60 p-4 text-sm">
