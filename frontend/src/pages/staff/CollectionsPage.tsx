@@ -6,6 +6,7 @@
  */
 
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { PayForm } from "../../components/PayForm";
 import {
@@ -29,11 +30,27 @@ import type { FeeAssignment } from "../../lib/types";
 const PAGE_SIZE = 25;
 
 export function CollectionsPage() {
-  const [classId, setClassId] = useState<number | undefined>();
+  // The class filter lives in the URL, not in component state. The dashboard
+  // links straight to a class's collections, and with the filter held locally
+  // that link navigated here and then showed everything - the worst kind of
+  // broken, because it looks like it worked. It also makes a filtered view
+  // something you can bookmark or send to a colleague.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const classParam = searchParams.get("class_id");
+  const classId = classParam ? Number(classParam) : undefined;
+
   const [outstandingOnly, setOutstandingOnly] = useState(true);
   const [offset, setOffset] = useState(0);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+
+  function setClassId(next: number | undefined) {
+    const params = new URLSearchParams(searchParams);
+    if (next === undefined) params.delete("class_id");
+    else params.set("class_id", String(next));
+    // replace: filtering is not a step worth pressing Back through twice.
+    setSearchParams(params, { replace: true });
+  }
 
   const classes = useClasses({ limit: 100 });
   const { data, isPending, error } = useAssignments({
@@ -65,10 +82,12 @@ export function CollectionsPage() {
           actions={
             <>
               <Select
-                aria-label="Class"
+                aria-label="Filter by class"
                 value={classId ?? ""}
                 onChange={(event) =>
-                  resetTo(() => setClassId(event.target.value ? Number(event.target.value) : undefined))
+                  resetTo(() =>
+                    setClassId(event.target.value ? Number(event.target.value) : undefined),
+                  )
                 }
               >
                 <option value="">All classes</option>

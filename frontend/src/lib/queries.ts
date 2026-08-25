@@ -184,6 +184,36 @@ export function useArchiveClass() {
   });
 }
 
+export function useUpdateClass() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number; name?: string; academic_year?: string }) =>
+      api.patch<SchoolClass>(`/classes/${id}`, body),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: ["classes"] });
+      // A class name appears on student rows and on the dashboard breakdown.
+      void queryClient.invalidateQueries({ queryKey: ["students"] });
+      void queryClient.invalidateQueries({ queryKey: ["summary"] });
+      return updated;
+    },
+  });
+}
+
+export function useUpdateFeeType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
+      api.patch<FeeType>(`/fee-types/${id}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["fee-types"] });
+      // Fees already assigned keep the amount they were billed at, but the
+      // fee's *name* is shown against them.
+      void queryClient.invalidateQueries({ queryKey: ["assignments"] });
+      void queryClient.invalidateQueries({ queryKey: ["student-balance"] });
+    },
+  });
+}
+
 export function useCreateFeeType() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -222,7 +252,11 @@ export function useUpdateStudent() {
       api.patch<Student>(`/students/${id}`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["students"] });
+      // Moving a student changes the roll count of two classes, the per-class
+      // breakdown, and which fees show under which class filter.
       void queryClient.invalidateQueries({ queryKey: ["classes"] });
+      void queryClient.invalidateQueries({ queryKey: ["summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["assignments"] });
     },
   });
 }

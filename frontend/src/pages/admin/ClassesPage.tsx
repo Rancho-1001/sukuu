@@ -2,7 +2,10 @@ import { useState } from "react";
 
 import { FormCard } from "../../components/FormCard";
 import { Badge, Button, Card, CardHeader, DataState, Input, Pager, Select, Table, Td, Th } from "../../components/ui";
-import { useArchiveClass, useClasses, useCreateClass } from "../../lib/queries";
+import { useArchiveClass, useClasses, useCreateClass, useUpdateClass } from "../../lib/queries";
+import type { SchoolClass } from "../../lib/types";
+import { ApiError } from "../../lib/api";
+import { Banner } from "../../components/ui";
 import { Field } from "../../components/ui";
 
 const PAGE_SIZE = 25;
@@ -17,6 +20,7 @@ export function ClassesPage() {
   });
   const create = useCreateClass();
   const archive = useArchiveClass();
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   return (
     <div className="space-y-6">
@@ -87,37 +91,120 @@ export function ClassesPage() {
             }
           >
             {data?.items.map((schoolClass) => (
-              <tr key={schoolClass.id}>
-                <Td>
-                  <span className="font-medium text-slate-900">{schoolClass.name}</span>
-                  {schoolClass.archived_at ? (
-                    <span className="ml-2">
-                      <Badge tone="slate">Archived</Badge>
-                    </span>
-                  ) : null}
-                </Td>
-                <Td>{schoolClass.academic_year}</Td>
-                <Td align="right">{schoolClass.active_student_count}</Td>
-                <Td align="right">
-                  <Button
-                    variant="secondary"
-                    disabled={archive.isPending}
-                    onClick={() =>
-                      archive.mutate({
-                        id: schoolClass.id,
-                        archived: schoolClass.archived_at !== null,
-                      })
-                    }
-                  >
-                    {schoolClass.archived_at ? "Restore" : "Archive"}
-                  </Button>
-                </Td>
-              </tr>
+              <ClassRow
+                key={schoolClass.id}
+                schoolClass={schoolClass}
+                isEditing={editingId === schoolClass.id}
+                onEdit={() => setEditingId(schoolClass.id)}
+                onDone={() => setEditingId(null)}
+                onArchive={() =>
+                  archive.mutate({
+                    id: schoolClass.id,
+                    archived: schoolClass.archived_at !== null,
+                  })
+                }
+                archiving={archive.isPending}
+              />
             ))}
           </Table>
           <Pager total={data?.total ?? 0} limit={PAGE_SIZE} offset={offset} onChange={setOffset} />
         </DataState>
       </Card>
     </div>
+  );
+}
+
+function ClassRow({
+  schoolClass,
+  isEditing,
+  onEdit,
+  onDone,
+  onArchive,
+  archiving,
+}: {
+  schoolClass: SchoolClass;
+  isEditing: boolean;
+  onEdit: () => void;
+  onDone: () => void;
+  onArchive: () => void;
+  archiving: boolean;
+}) {
+  const update = useUpdateClass();
+  const [error, setError] = useState<ApiError | null>(null);
+
+  if (isEditing) {
+    return (
+      <tr className="bg-slate-50">
+        <td colSpan={4} className="px-5 py-4">
+          {error ? (
+            <div className="mb-3">
+              <Banner>{error.message}</Banner>
+            </div>
+          ) : null}
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              setError(null);
+              try {
+                await update.mutateAsync({
+                  id: schoolClass.id,
+                  name: String(form.get("name") ?? ""),
+                  academic_year: String(form.get("academic_year") ?? ""),
+                });
+                onDone();
+              } catch (caught) {
+                setError(
+                  caught instanceof ApiError ? caught : new ApiError(0, "Could not save."),
+                );
+              }
+            }}
+          >
+            <div className="w-48">
+              <Field label="Name" error={error?.fieldError("name")}>
+                <Input name="name" defaultValue={schoolClass.name} required />
+              </Field>
+            </div>
+            <div className="w-32">
+              <Field label="Academic year" error={error?.fieldError("academic_year")}>
+                <Input name="academic_year" defaultValue={schoolClass.academic_year} required />
+              </Field>
+            </div>
+            <Button type="submit" disabled={update.isPending}>
+              {update.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="ghost" onClick={onDone}>
+              Cancel
+            </Button>
+          </form>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <Td>
+        <span className="font-medium text-slate-900">{schoolClass.name}</span>
+        {schoolClass.archived_at ? (
+          <span className="ml-2">
+            <Badge tone="slate">Archived</Badge>
+          </span>
+        ) : null}
+      </Td>
+      <Td>{schoolClass.academic_year}</Td>
+      <Td align="right">{schoolClass.active_student_count}</Td>
+      <Td align="right">
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onEdit}>
+            Rename
+          </Button>
+          <Button variant="secondary" disabled={archiving} onClick={onArchive}>
+            {schoolClass.archived_at ? "Restore" : "Archive"}
+          </Button>
+        </div>
+      </Td>
+    </tr>
   );
 }

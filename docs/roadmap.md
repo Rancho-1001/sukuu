@@ -230,6 +230,11 @@ bugs get in, and this is the part that carries the security story.
 > whether 0.00 is a payment. Its client-side checks are a courtesy — the server validates
 > again against a balance that may have moved, and its refusal is what gets shown.
 
+> The collections class filter lives in the URL, not in component state. Held locally, the
+> dashboard's per-class link navigated here and then showed every fee in the school — which
+> looks like it worked, and is the worst kind of broken. It also makes a filtered view
+> something you can bookmark or send to a colleague.
+
 **Done when** all three roles can complete their whole job without touching the API docs. ✅
 
 ---

@@ -189,7 +189,7 @@ export function AssignFeesPage() {
           subtitle={data ? `${data.total} total` : undefined}
           actions={
             <Select
-              aria-label="Class"
+              aria-label="Filter by class"
               value={classFilter ?? ""}
               onChange={(event) => {
                 setClassFilter(event.target.value ? Number(event.target.value) : undefined);
