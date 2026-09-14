@@ -1,6 +1,14 @@
 import { Link } from "react-router-dom";
 
-import { Amount, Card, CardHeader, DataState, Table, Td, Th } from "../../components/ui";
+import { Suspense, lazy } from "react";
+
+// Recharts is the single heaviest dependency in the app and only this page
+// uses it. Loading it here, on demand, keeps it out of the bundle a parent on
+// a slow connection downloads to pay a fee.
+const CollectionChart = lazy(() =>
+  import("../../components/CollectionChart").then((m) => ({ default: m.CollectionChart })),
+);
+import { Amount, Card, CardHeader, DataState, Skeleton, Table, Td, Th } from "../../components/ui";
 import { useSchoolSummary } from "../../lib/queries";
 import { toMinorUnits } from "../../lib/money";
 import { Totals } from "../../components/StudentLedger";
@@ -28,6 +36,17 @@ export function DashboardPage() {
         {data ? (
           <div className="space-y-6">
             <Totals billed={data.billed} paid={data.paid} outstanding={data.outstanding} />
+
+            {data.classes.length > 0 ? (
+              <Card>
+                <CardHeader title="Collection by class" subtitle="Paid and still owed, per class." />
+                <div className="px-3 py-4">
+                  <Suspense fallback={<Skeleton rows={data.classes.length} />}>
+                    <CollectionChart rows={data.classes} />
+                  </Suspense>
+                </div>
+              </Card>
+            ) : null}
 
             <Card>
               <CardHeader

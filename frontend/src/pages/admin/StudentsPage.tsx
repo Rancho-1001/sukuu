@@ -19,7 +19,7 @@ import { useAuth } from "../../auth/context";
 import { useClasses, useCreateStudent, useStudents, useUpdateStudent, useUsers } from "../../lib/queries";
 import type { ClassSummary, Student, User } from "../../lib/types";
 import { ApiError } from "../../lib/api";
-import { Banner, Button } from "../../components/ui";
+import { Banner, Button, ConfirmButton } from "../../components/ui";
 
 const PAGE_SIZE = 25;
 
@@ -298,17 +298,24 @@ function StudentRow({
         )}
       </Td>
       <Td label="Status" align="right">
-        {isAdmin ? (
+        {isAdmin && student.status === "active" ? (
+          <ConfirmButton
+            label="Active"
+            question={`Withdraw ${student.full_name}?`}
+            confirmLabel="Withdraw"
+            variant="ghost"
+            disabled={update.isPending}
+            onConfirm={() => save({ status: "inactive" })}
+          />
+        ) : isAdmin ? (
           <button
             type="button"
             disabled={update.isPending}
             className="disabled:opacity-50"
-            title={student.status === "active" ? "Mark as withdrawn" : "Mark as active"}
-            onClick={() => save({ status: student.status === "active" ? "inactive" : "active" })}
+            title="Mark as active"
+            onClick={() => save({ status: "active" })}
           >
-            <Badge tone={student.status === "active" ? "green" : "slate"}>
-              {student.status === "active" ? "Active" : "Withdrawn"}
-            </Badge>
+            <Badge tone="slate">Withdrawn</Badge>
           </button>
         ) : (
           <Badge tone={student.status === "active" ? "green" : "slate"}>

@@ -6,6 +6,7 @@
  * once lives with the page that uses it.
  */
 
+import { useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
 import { formatMoney } from "../lib/money";
@@ -128,6 +129,77 @@ export function Spinner({ label = "Loading" }: { label?: string }) {
 }
 
 /**
+ * What a list looks like before it has loaded: the shape of rows, not a
+ * spinner. A spinner says "wait"; a skeleton says "this is what is coming",
+ * and the page does not jump when the real rows replace it.
+ */
+export function Skeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div role="status" aria-label="Loading" className="animate-pulse divide-y divide-slate-100">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center gap-4 px-5 py-4">
+          <div className="h-3.5 flex-1 rounded bg-slate-200" style={{ maxWidth: `${55 - index * 6}%` }} />
+          <div className="h-3.5 w-24 rounded bg-slate-100" />
+          <div className="ml-auto h-3.5 w-16 rounded bg-slate-200" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A button that asks before it acts.
+ *
+ * Archiving a class or withdrawing a student is reversible, but not
+ * obviously so from the button, and both are one click on a row that a
+ * finger can land on by accident. The question appears in place of the
+ * button rather than in a dialog, so it is one tap to confirm and one to back
+ * out, and nothing steals focus from the table.
+ */
+export function ConfirmButton({
+  label,
+  question,
+  confirmLabel = "Yes",
+  variant = "secondary",
+  disabled,
+  onConfirm,
+}: {
+  label: string;
+  question: string;
+  confirmLabel?: string;
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  disabled?: boolean;
+  onConfirm: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+
+  if (!asking) {
+    return (
+      <Button variant={variant} disabled={disabled} onClick={() => setAsking(true)}>
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <span className="inline-flex flex-wrap items-center justify-end gap-2 text-sm text-slate-700">
+      <span>{question}</span>
+      <Button
+        variant="danger"
+        onClick={() => {
+          setAsking(false);
+          onConfirm();
+        }}
+      >
+        {confirmLabel}
+      </Button>
+      <Button variant="ghost" onClick={() => setAsking(false)}>
+        Cancel
+      </Button>
+    </span>
+  );
+}
+
+/**
  * Loading, empty and error in one place.
  *
  * Every list in this application has all three states, and the roadmap asks
@@ -148,11 +220,7 @@ export function DataState({
   children: ReactNode;
 }) {
   if (isPending) {
-    return (
-      <div className="px-5 py-10 text-center">
-        <Spinner />
-      </div>
-    );
+    return <Skeleton />;
   }
   if (error) {
     return (

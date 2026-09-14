@@ -1,7 +1,20 @@
 import { useState } from "react";
 
 import { FormCard } from "../../components/FormCard";
-import { Badge, Button, Card, CardHeader, DataState, Input, Pager, Select, Table, Td, Th } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmButton,
+  DataState,
+  Input,
+  Pager,
+  Select,
+  Table,
+  Td,
+  Th,
+} from "../../components/ui";
 import { useArchiveClass, useClasses, useCreateClass, useUpdateClass } from "../../lib/queries";
 import type { SchoolClass } from "../../lib/types";
 import { ApiError } from "../../lib/api";
@@ -200,9 +213,19 @@ function ClassRow({
           <Button variant="ghost" onClick={onEdit}>
             Rename
           </Button>
-          <Button variant="secondary" disabled={archiving} onClick={onArchive}>
-            {schoolClass.archived_at ? "Restore" : "Archive"}
-          </Button>
+          {schoolClass.archived_at ? (
+            <Button variant="secondary" disabled={archiving} onClick={onArchive}>
+              Restore
+            </Button>
+          ) : (
+            <ConfirmButton
+              label="Archive"
+              question={`Archive ${schoolClass.name}?`}
+              confirmLabel="Archive"
+              disabled={archiving}
+              onConfirm={onArchive}
+            />
+          )}
         </div>
       </Td>
     </tr>
