@@ -11,7 +11,7 @@ Run with:  python -m app.db.seed
 from __future__ import annotations
 
 import random
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -224,10 +224,15 @@ def seed(session: Session) -> None:
         else:
             installments = []
 
+        # Paid over the past ten weeks, later installments after earlier ones.
+        # Without this every payment carries the moment the seed ran, and a
+        # history sorted "most recent first" is sorted by nothing.
+        paid_on = today - timedelta(days=rng.randint(14, 70))
         for n, amount in enumerate(installments):
             if amount <= 0:
                 continue
             cash = rng.random() < 0.45
+            paid_on += timedelta(days=rng.randint(1, 12) if n else 0)
             session.add(
                 Payment(
                     fee_assignment=assignment,
@@ -236,6 +241,11 @@ def seed(session: Session) -> None:
                     stripe_payment_intent_id=None if cash else f"pi_seed_{assignment.id}_{n}",
                     stripe_event_id=None if cash else f"evt_seed_{assignment.id}_{n}",
                     recorded_by=bursar if cash else None,
+                    paid_at=datetime.combine(
+                        min(paid_on, today),
+                        time(hour=rng.randint(8, 16), minute=rng.randint(0, 59)),
+                        tzinfo=UTC,
+                    ),
                 )
             )
 

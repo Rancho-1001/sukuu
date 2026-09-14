@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/context";
 import { homeFor } from "../auth/roles";
+import { BrandMark } from "../components/Brand";
 import { Banner, Button, Field, Input } from "../components/ui";
 import { ApiError } from "../lib/api";
 
@@ -58,8 +59,15 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
+          <div className="mx-auto mb-3 w-fit">
+            <BrandMark size={44} />
+          </div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sukuu</h1>
           <p className="mt-1 text-sm text-slate-500">School fee management</p>
+          <p className="mx-auto mt-3 max-w-xs text-sm text-slate-600">
+            Fees, installments, and payments for a primary school — with three roles the
+            server actually enforces, and money that is never a float.
+          </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

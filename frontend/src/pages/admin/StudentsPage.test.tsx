@@ -147,15 +147,33 @@ describe("editing a student", () => {
     expect(patched).toBeNull();
   });
 
-  it("toggles status without opening the editor", async () => {
+  it("withdraws a student after asking, without opening the editor", async () => {
+    // One tap on a row a finger can land on by accident should not withdraw a
+    // child. The question appears in place; confirming is the second tap.
     const user = userEvent.setup();
     renderWithProviders(<StudentsPage />, { route: "/students" });
     await screen.findByText("Ama Mensah");
 
-    await user.click(screen.getByTitle("Mark as withdrawn"));
+    await user.click(screen.getByRole("button", { name: "Active" }));
+    expect(patched).toBeNull();
+    expect(screen.getByText("Withdraw Ama Mensah?")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Withdraw" }));
 
     await waitFor(() => expect(patched).not.toBeNull());
     expect(patched!.body).toEqual({ status: "inactive" });
+  });
+
+  it("backs out of a withdrawal without saving", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<StudentsPage />, { route: "/students" });
+    await screen.findByText("Ama Mensah");
+
+    await user.click(screen.getByRole("button", { name: "Active" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(patched).toBeNull();
+    expect(screen.getByRole("button", { name: "Active" })).toBeInTheDocument();
   });
 });
 
