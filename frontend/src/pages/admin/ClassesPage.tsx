@@ -185,7 +185,7 @@ function ClassRow({
 
   return (
     <tr>
-      <Td>
+      <Td label="Class">
         <span className="font-medium text-slate-900">{schoolClass.name}</span>
         {schoolClass.archived_at ? (
           <span className="ml-2">
@@ -193,8 +193,8 @@ function ClassRow({
           </span>
         ) : null}
       </Td>
-      <Td>{schoolClass.academic_year}</Td>
-      <Td align="right">{schoolClass.active_student_count}</Td>
+      <Td label="Year">{schoolClass.academic_year}</Td>
+      <Td label="Students" align="right">{schoolClass.active_student_count}</Td>
       <Td align="right">
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onEdit}>

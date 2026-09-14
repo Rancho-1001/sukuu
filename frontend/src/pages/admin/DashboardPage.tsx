@@ -56,7 +56,7 @@ export function DashboardPage() {
                 >
                   {data.classes.map((row) => (
                     <tr key={row.school_class.id}>
-                      <Td>
+                      <Td label="Class">
                         <Link
                           to={`/collections?class_id=${row.school_class.id}`}
                           className="font-medium text-slate-900 hover:text-indigo-600"
@@ -65,13 +65,13 @@ export function DashboardPage() {
                         </Link>
                         <span className="ml-2 text-slate-400">{row.school_class.academic_year}</span>
                       </Td>
-                      <Td align="right">
+                      <Td label="Billed" align="right">
                         <Amount value={row.billed} />
                       </Td>
-                      <Td align="right" className="text-emerald-700">
+                      <Td label="Paid" align="right" className="text-emerald-700">
                         <Amount value={row.paid} />
                       </Td>
-                      <Td align="right" className="font-medium">
+                      <Td label="Outstanding" align="right" className="font-medium">
                         <Amount value={row.outstanding} />
                       </Td>
                     </tr>

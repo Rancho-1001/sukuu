@@ -206,14 +206,14 @@ function FeeTypeRow({
 
   return (
     <tr>
-      <Td>
+      <Td label="Fee">
         <span className="font-medium text-slate-900">{feeType.name}</span>
         {feeType.description ? (
           <p className="text-sm text-slate-500">{feeType.description}</p>
         ) : null}
       </Td>
-      <Td>{PERIODS.find((period) => period.value === feeType.billing_period)?.label}</Td>
-      <Td align="right">
+      <Td label="Billing">{PERIODS.find((period) => period.value === feeType.billing_period)?.label}</Td>
+      <Td label="Default" align="right">
         <Amount value={feeType.default_amount} />
       </Td>
       <Td align="right">

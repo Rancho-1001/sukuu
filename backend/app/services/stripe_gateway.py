@@ -45,13 +45,20 @@ def create_checkout_session(
     fee_assignment_id: int,
     paid_by_user_id: int,
     description: str,
+    success_url: str | None = None,
+    cancel_url: str | None = None,
 ) -> CheckoutSession:
-    """Hand Stripe a bill and get back somewhere to send the payer."""
+    """Hand Stripe a bill and get back somewhere to send the payer.
+
+    The return URLs default to the configured ones but may be overridden per
+    session, which is how the page a parent lands on afterwards knows which
+    bill they just paid rather than greeting everyone identically.
+    """
     session = stripe.checkout.Session.create(
         api_key=settings.stripe_secret_key,
         mode="payment",
-        success_url=settings.stripe_success_url,
-        cancel_url=settings.stripe_cancel_url,
+        success_url=success_url or settings.stripe_success_url,
+        cancel_url=cancel_url or settings.stripe_cancel_url,
         line_items=[
             {
                 "quantity": 1,

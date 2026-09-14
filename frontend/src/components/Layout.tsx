@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 import { useAuth } from "../auth/context";
 import { Button } from "./ui";
+import { WakingBanner } from "./WakingBanner";
 import type { UserRole } from "../lib/types";
 
 /**
@@ -63,6 +64,8 @@ export function Layout() {
           </div>
         </div>
       </header>
+
+      <WakingBanner />
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         <Outlet />

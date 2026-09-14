@@ -211,3 +211,37 @@ class TestTheAmountIsCheckedFirst:
         _, headers, bill = family
         api.post(URL, json={"fee_assignment_id": bill.id, "amount": "999.00"}, headers=headers)
         assert stripe_calls == []
+
+
+class TestWhereStripeSendsThemBack:
+    def test_the_return_urls_name_the_payment(self, api, family, stripe_calls):
+        """Nothing else survives the round trip through Stripe - no session, no
+        state - so the URL is how the landing page learns what was paid."""
+        parent, headers, bill = family
+        api.post(URL, json={"fee_assignment_id": bill.id, "amount": "50.00"}, headers=headers)
+
+        success = stripe_calls[0]["success_url"]
+        assert success.startswith("http://localhost:5173/payments/success?")
+        assert f"student={bill.student_id}" in success
+        assert f"fee={bill.id}" in success
+        assert "paid_before=0.00" in success
+
+    def test_paid_before_reflects_what_was_already_paid(
+        self, api, family, stripe_calls, make_payment
+    ):
+        """The landing page confirms the webhook by watching the balance move
+        past this number, so it has to be the balance at checkout time."""
+        _, headers, bill = family
+        make_payment(bill, "75.00")
+
+        api.post(URL, json={"fee_assignment_id": bill.id, "amount": "25.00"}, headers=headers)
+
+        assert "paid_before=75.00" in stripe_calls[0]["success_url"]
+
+    def test_the_cancel_url_carries_the_same_context(self, api, family, stripe_calls):
+        _, headers, bill = family
+        api.post(URL, json={"fee_assignment_id": bill.id, "amount": "50.00"}, headers=headers)
+
+        cancel = stripe_calls[0]["cancel_url"]
+        assert cancel.startswith("http://localhost:5173/payments/cancelled?")
+        assert f"student={bill.student_id}" in cancel

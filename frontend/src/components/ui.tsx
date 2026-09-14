@@ -167,10 +167,18 @@ export function DataState({
   return <>{children}</>;
 }
 
+/**
+ * A table on a desk, a stack of cards on a phone.
+ *
+ * Below the `md` breakpoint the header row is hidden and each cell becomes a
+ * labelled line - the label comes from the `label` prop on `Td`, which is why
+ * every cell carries one. A bursar at a school gate is on a phone, and the
+ * one column that overflowed there was the one with the "Record cash" button.
+ */
 export function Table({ head, children }: { head: ReactNode; children: ReactNode }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="responsive-table w-full text-left text-sm">
         <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
           {head}
         </thead>
@@ -184,8 +192,26 @@ export function Th({ children, align = "left" }: { children: ReactNode; align?: 
   return <th className={`px-5 py-3 font-medium ${align === "right" ? "text-right" : ""}`}>{children}</th>;
 }
 
-export function Td({ children, align = "left", className = "" }: { children: ReactNode; align?: "left" | "right"; className?: string }) {
-  return <td className={`px-5 py-3 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+export function Td({
+  children,
+  align = "left",
+  className = "",
+  label,
+}: {
+  children: ReactNode;
+  align?: "left" | "right";
+  className?: string;
+  /** The column name, shown beside the value when the table stacks on a phone. */
+  label?: string;
+}) {
+  return (
+    <td
+      data-label={label}
+      className={`px-5 py-3 ${align === "right" ? "text-right" : ""} ${className}`}
+    >
+      {children}
+    </td>
+  );
 }
 
 export function Pager({

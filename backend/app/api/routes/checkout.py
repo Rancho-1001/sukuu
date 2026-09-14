@@ -13,10 +13,13 @@ fees paid.
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.errors import unprocessable
+from app.core.config import settings
 from app.models import FeeAssignment, UserRole
 from app.schemas.payments import CheckoutSessionCreate, CheckoutSessionOut
 from app.services import audit, ledger, stripe_gateway
@@ -69,11 +72,26 @@ def create_checkout_session(
     except PaymentError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
+    # The page Stripe sends the parent back to needs to know what they paid
+    # for, and nothing else survives the round trip: no session, no state, just
+    # the URL. So the URL carries it. `paid_before` is what lets that page tell
+    # "the webhook has landed" from "it has not yet" - the balance moving past
+    # this number is the confirmation, and the page can wait for it honestly
+    # instead of declaring success the moment Stripe redirects.
+    context = urlencode(
+        {
+            "student": assignment.student_id,
+            "fee": assignment.id,
+            "paid_before": str(to_money(paid)),
+        }
+    )
     session = stripe_gateway.create_checkout_session(
         amount=amount,
         fee_assignment_id=assignment.id,
         paid_by_user_id=current_user.id,
         description=f"{assignment.fee_type.name} - {assignment.period_label}",
+        success_url=f"{settings.stripe_success_url}?{context}",
+        cancel_url=f"{settings.stripe_cancel_url}?{context}",
     )
 
     # Recorded even though nothing was paid: a session that is opened and never
