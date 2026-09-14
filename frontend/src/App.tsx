@@ -12,6 +12,7 @@ import { FeeTypesPage } from "./pages/admin/FeeTypesPage";
 import { StudentsPage } from "./pages/admin/StudentsPage";
 import { ChildBalancePage } from "./pages/parent/ChildBalancePage";
 import { MyChildrenPage } from "./pages/parent/MyChildrenPage";
+import { PaymentCancelledPage, PaymentSuccessPage } from "./pages/parent/PaymentResultPage";
 import { CollectionsPage } from "./pages/staff/CollectionsPage";
 
 /** Sends each role to the screen where their job starts. */
@@ -48,6 +49,9 @@ export function App() {
           <Route element={<RequireRole roles={["parent"]} />}>
             <Route path="/my-children" element={<MyChildrenPage />} />
             <Route path="/my-children/:studentId" element={<ChildBalancePage />} />
+            {/* Where Stripe sends a parent back to. Only the webhook records the payment. */}
+            <Route path="/payments/success" element={<PaymentSuccessPage />} />
+            <Route path="/payments/cancelled" element={<PaymentCancelledPage />} />
           </Route>
 
           <Route path="*" element={<Home />} />

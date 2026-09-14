@@ -158,14 +158,14 @@ function PaymentHistory({ studentId }: { studentId: number }) {
         >
           {data?.items.map((payment) => (
             <tr key={payment.id}>
-              <Td>{new Date(payment.paid_at).toLocaleDateString()}</Td>
-              <Td>
+              <Td label="Date">{new Date(payment.paid_at).toLocaleDateString()}</Td>
+              <Td label="Method">
                 <Badge tone={payment.method === "stripe" ? "slate" : "amber"}>
                   {payment.method === "stripe" ? "Card" : "Cash"}
                 </Badge>
               </Td>
-              <Td>{payment.recorded_by?.name ?? "Online"}</Td>
-              <Td align="right" className="font-medium">
+              <Td label="Recorded by">{payment.recorded_by?.name ?? "Online"}</Td>
+              <Td label="Amount" align="right" className="font-medium">
                 <Amount value={payment.amount_paid} />
               </Td>
             </tr>

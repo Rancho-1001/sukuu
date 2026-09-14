@@ -223,17 +223,17 @@ export function AssignFeesPage() {
           >
             {data?.items.map((line) => (
               <tr key={line.id}>
-                <Td>
+                <Td label="Student">
                   <span className="font-medium text-slate-900">{line.student.full_name}</span>
                 </Td>
-                <Td>
+                <Td label="Fee">
                   {line.fee_type.name}
                   <span className="ml-2 text-slate-400">{line.period_label}</span>
                 </Td>
-                <Td align="right">
+                <Td label="Amount" align="right">
                   <Amount value={line.amount} />
                 </Td>
-                <Td align="right">
+                <Td label="Owed" align="right">
                   {line.settled ? (
                     <Badge tone="green">Paid</Badge>
                   ) : (

@@ -279,12 +279,12 @@ function StudentRow({
 
   return (
     <tr>
-      <Td>
+      <Td label="Student">
         <span className="font-medium text-slate-900">{student.full_name}</span>
         <span className="ml-2 font-mono text-xs text-slate-400">{student.admission_number}</span>
       </Td>
-      <Td>{student.school_class?.name ?? <span className="text-slate-400">Unplaced</span>}</Td>
-      <Td>
+      <Td label="Class">{student.school_class?.name ?? <span className="text-slate-400">Unplaced</span>}</Td>
+      <Td label="Parent">
         {student.parent ? (
           <>
             {student.parent.name}
@@ -294,7 +294,7 @@ function StudentRow({
           <span className="text-slate-400">None</span>
         )}
       </Td>
-      <Td align="right">
+      <Td label="Status" align="right">
         {isAdmin ? (
           <button
             type="button"

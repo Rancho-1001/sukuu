@@ -174,17 +174,17 @@ function Row({
   return (
     <>
       <tr className={isPaying ? "bg-slate-50" : undefined}>
-        <Td>
+        <Td label="Student">
           <span className="font-medium text-slate-900">{line.student.full_name}</span>
           <span className="ml-2 font-mono text-xs text-slate-400">
             {line.student.admission_number}
           </span>
         </Td>
-        <Td>
+        <Td label="Fee">
           {line.fee_type.name}
           <span className="ml-2 text-slate-400">{line.period_label}</span>
         </Td>
-        <Td align="right">
+        <Td label="Owed" align="right">
           {line.settled ? (
             <Badge tone="green">Paid</Badge>
           ) : (
@@ -194,11 +194,9 @@ function Row({
           )}
         </Td>
         <Td align="right">
-          {line.settled ? null : isPaying ? (
-            <Button variant="ghost" onClick={onCancel}>
-              Cancel
-            </Button>
-          ) : (
+          {/* The form below carries its own Cancel; a second one here doubled
+              up once the table stacked on a phone. */}
+          {line.settled || isPaying ? null : (
             <Button variant="secondary" onClick={onPay}>
               Record cash
             </Button>

@@ -8,6 +8,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { UseQueryOptions } from "@tanstack/react-query";
 
 import { api, query } from "./api";
 import type {
@@ -106,11 +107,15 @@ export function useAssignments(
   });
 }
 
-export function useStudentBalance(studentId: number | undefined) {
+export function useStudentBalance(
+  studentId: number | undefined,
+  options: Pick<UseQueryOptions<StudentBalance>, "refetchInterval"> = {},
+) {
   return useQuery({
     queryKey: keys.studentBalance(studentId!),
     queryFn: () => api.get<StudentBalance>(`/students/${studentId}/balance`),
     enabled: studentId !== undefined,
+    ...options,
   });
 }
 
