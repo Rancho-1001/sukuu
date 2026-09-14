@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Amount, Card, CardHeader, DataState, Table, Td, Th } from "../../components/ui";
 import { useSchoolSummary } from "../../lib/queries";
 import { toMinorUnits } from "../../lib/money";
-import { Totals } from "../parent/MyChildrenPage";
+import { Totals } from "../../components/StudentLedger";
 
 export function DashboardPage() {
   const { data, isPending, error } = useSchoolSummary();
@@ -58,7 +58,7 @@ export function DashboardPage() {
                     <tr key={row.school_class.id}>
                       <Td label="Class">
                         <Link
-                          to={`/collections?class_id=${row.school_class.id}`}
+                          to={`/classes/${row.school_class.id}`}
                           className="font-medium text-slate-900 hover:text-indigo-600"
                         >
                           {row.school_class.name}

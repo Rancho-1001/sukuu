@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-import { Amount, Badge, Card, DataState } from "../../components/ui";
+import { Badge, Card, DataState } from "../../components/ui";
 import { useMyChildren } from "../../lib/queries";
 import type { Student } from "../../lib/types";
 
@@ -52,34 +52,5 @@ function ChildRow({ child }: { child: Student }) {
         </div>
       </Link>
     </li>
-  );
-}
-
-/** Three headline figures. Shared by the child page and the admin dashboard. */
-export function Totals({
-  billed,
-  paid,
-  outstanding,
-}: {
-  billed: string;
-  paid: string;
-  outstanding: string;
-}) {
-  const cells = [
-    { label: "Billed", value: billed, tone: "text-slate-900" },
-    { label: "Paid", value: paid, tone: "text-emerald-700" },
-    { label: "Outstanding", value: outstanding, tone: "text-slate-900" },
-  ];
-  return (
-    <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {cells.map((cell) => (
-        <Card key={cell.label} className="px-5 py-4">
-          <dt className="text-sm text-slate-500">{cell.label}</dt>
-          <dd className={`mt-1 text-2xl font-semibold ${cell.tone}`}>
-            <Amount value={cell.value} />
-          </dd>
-        </Card>
-      ))}
-    </dl>
   );
 }

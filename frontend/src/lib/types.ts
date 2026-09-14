@@ -105,6 +105,13 @@ export interface Payment {
   method: PaymentMethod;
   paid_at: string;
   recorded_by: { id: number; name: string } | null;
+  /** The bill this was against - who, for what, which period. */
+  fee_assignment: {
+    id: number;
+    period_label: string;
+    student: StudentSummary;
+    fee_type: FeeTypeSummary;
+  };
 }
 
 export interface CashPaymentReceipt {

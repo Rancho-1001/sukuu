@@ -33,7 +33,16 @@ router = APIRouter(tags=["payments"])
 
 
 def _with_relations() -> Select:
-    return select(Payment).options(joinedload(Payment.recorded_by))
+    """Payments with everything a log line needs, in one query.
+
+    The bill, its student and its fee type are three hops away. Left lazy,
+    a page of twenty-five payments is seventy-six queries.
+    """
+    return select(Payment).options(
+        joinedload(Payment.recorded_by),
+        joinedload(Payment.fee_assignment).joinedload(FeeAssignment.student),
+        joinedload(Payment.fee_assignment).joinedload(FeeAssignment.fee_type),
+    )
 
 
 @router.post(
@@ -87,6 +96,10 @@ def record_cash_payment(
         .options(joinedload(FeeAssignment.student), joinedload(FeeAssignment.fee_type))
         .where(FeeAssignment.id == payload.fee_assignment_id)
     ).one()
+    # The receipt's payment needs its relations loaded too; the row above has
+    # the assignment with student and fee type already, so hand it over rather
+    # than lazy-loading three more queries.
+    payment.fee_assignment = row[0]
     return CashPaymentReceipt(
         payment=PaymentOut.model_validate(payment),
         fee_assignment=FeeAssignmentOut.from_row(*row),

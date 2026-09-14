@@ -320,3 +320,50 @@ def test_a_cash_payment_is_recorded_as_cash(api, staff_headers, bill, db_session
     db_session.refresh(bill)
     assert [p.method for p in bill.payments] == [PaymentMethod.CASH]
     assert all(p.stripe_payment_intent_id is None for p in bill.payments)
+
+
+class TestALogLineIsReadable:
+    def test_a_payment_says_who_and_for_what(self, api, staff_headers, bill, make_payment):
+        """A log that says "fee #3" is a log nobody can use."""
+        make_payment(bill, "10.00")
+        row = api.get(f"/payments?fee_assignment_id={bill.id}", headers=staff_headers).json()[
+            "items"
+        ][0]
+        assert row["fee_assignment"]["student"]["full_name"] == bill.student.full_name
+        assert row["fee_assignment"]["fee_type"]["name"] == bill.fee_type.name
+        assert row["fee_assignment"]["period_label"] == bill.period_label
+
+    def test_the_query_count_does_not_grow_with_the_page(
+        self,
+        api,
+        staff_headers,
+        make_class,
+        make_student,
+        make_fee_type,
+        make_fee_assignment,
+        make_payment,
+        query_counter,
+    ):
+        """Three hops away - bill, student, fee type. Left lazy, a page of
+        twenty-five payments is seventy-six queries."""
+        fee_type = make_fee_type(default_amount="100.00")
+        quiet, busy = make_class(), make_class()
+        make_payment(make_fee_assignment(make_student(school_class=quiet), fee_type), "10.00")
+        for _ in range(6):
+            make_payment(make_fee_assignment(make_student(school_class=busy), fee_type), "10.00")
+
+        api.get("/payments?limit=1", headers=staff_headers)
+        with query_counter() as small:
+            api.get(f"/payments?class_id={quiet.id}", headers=staff_headers)
+        with query_counter() as large:
+            api.get(f"/payments?class_id={busy.id}", headers=staff_headers)
+
+        assert len(small) == len(large)
+
+    def test_the_cash_receipt_carries_it_too(self, api, staff_headers, bill):
+        body = api.post(
+            "/payments",
+            json={"fee_assignment_id": bill.id, "amount": "10.00"},
+            headers=staff_headers,
+        ).json()
+        assert body["payment"]["fee_assignment"]["student"]["id"] == bill.student_id
