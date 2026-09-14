@@ -37,6 +37,14 @@ class Settings(BaseSettings):
     # for every request, which turns the per-IP limit off.
     trust_proxy_headers: bool = False
 
+    @field_validator("stripe_secret_key", "stripe_webhook_secret", "jwt_secret", "database_url")
+    @classmethod
+    def _strip_pasted_whitespace(cls, value: str) -> str:
+        """A trailing newline from a copy-paste is invisible in a dashboard and
+        fatal to an HMAC. Every one of these is pasted into a form at some
+        point, so tolerate it here rather than debug it from a 400."""
+        return value.strip()
+
     @field_validator("frontend_origin")
     @classmethod
     def _never_a_wildcard(cls, value: str) -> str:
