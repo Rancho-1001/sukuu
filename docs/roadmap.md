@@ -269,8 +269,10 @@ Vercel (frontend) + Render (API) + Supabase (Postgres). Runbook in [deploy.md](d
 > with its own connection pool, and session mode behaves like a direct connection — which is
 > what `SELECT … FOR UPDATE` and psycopg's prepared statements both need.
 
-> Migrations run as Render's `preDeployCommand`, never in the build step. A build can run
-> for a preview or be retried, and would migrate whatever database it happened to point at.
+> Render's free tier rejects `preDeployCommand`, so migrations run from a laptop against
+> Supabase before a schema-changing commit is pushed. Never in the build step: a build can
+> run for a preview or be retried, and would migrate whatever database it happened to point
+> at. A paid instance gets the proper release step back with one line in `render.yaml`.
 
 > Free Render instances sleep after 15 quiet minutes and take about a minute to wake. The
 > login page says so rather than showing a spinner. A Stripe webhook that times out against
