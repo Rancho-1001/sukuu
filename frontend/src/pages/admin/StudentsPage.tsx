@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { FormCard } from "../../components/FormCard";
 import {
@@ -280,7 +281,9 @@ function StudentRow({
   return (
     <tr>
       <Td label="Student">
-        <span className="font-medium text-slate-900">{student.full_name}</span>
+        <Link to={`/students/${student.id}`} className="font-medium text-slate-900 hover:text-indigo-600">
+          {student.full_name}
+        </Link>
         <span className="ml-2 font-mono text-xs text-slate-400">{student.admission_number}</span>
       </Td>
       <Td label="Class">{student.school_class?.name ?? <span className="text-slate-400">Unplaced</span>}</Td>

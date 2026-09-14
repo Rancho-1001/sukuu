@@ -20,9 +20,11 @@ const NAV: Record<UserRole, { to: string; label: string }[]> = {
     { to: "/fee-types", label: "Fee types" },
     { to: "/assignments", label: "Fees" },
     { to: "/collections", label: "Collections" },
+    { to: "/payments", label: "Payments" },
   ],
   staff: [
     { to: "/collections", label: "Collections" },
+    { to: "/payments", label: "Payments" },
     { to: "/students", label: "Students" },
   ],
   parent: [{ to: "/my-children", label: "My children" }],

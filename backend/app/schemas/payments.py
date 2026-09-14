@@ -10,6 +10,7 @@ from app.models.enums import PaymentMethod
 from app.schemas.classes import ClassSummary
 from app.schemas.common import Money, MoneyTotal, Page
 from app.schemas.fee_assignments import FeeAssignmentOut
+from app.schemas.fee_types import FeeTypeSummary
 from app.schemas.students import ParentSummary, StudentSummary
 
 
@@ -38,6 +39,21 @@ class RecordedBy(BaseModel):
     name: str
 
 
+class PaidFor(BaseModel):
+    """The bill a payment was against, enough to read a log line by.
+
+    A payments log that says "fee #3" is a log nobody can use. This is who,
+    for what, and which period - the three things a bursar reads off a row.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    period_label: str
+    student: StudentSummary
+    fee_type: FeeTypeSummary
+
+
 class PaymentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -47,6 +63,7 @@ class PaymentOut(BaseModel):
     method: PaymentMethod
     paid_at: datetime
     recorded_by: RecordedBy | None = None
+    fee_assignment: PaidFor
 
 
 class CashPaymentReceipt(BaseModel):

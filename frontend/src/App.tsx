@@ -13,7 +13,10 @@ import { StudentsPage } from "./pages/admin/StudentsPage";
 import { ChildBalancePage } from "./pages/parent/ChildBalancePage";
 import { MyChildrenPage } from "./pages/parent/MyChildrenPage";
 import { PaymentCancelledPage, PaymentSuccessPage } from "./pages/parent/PaymentResultPage";
+import { ClassDetailPage } from "./pages/staff/ClassDetailPage";
 import { CollectionsPage } from "./pages/staff/CollectionsPage";
+import { PaymentsPage } from "./pages/staff/PaymentsPage";
+import { StudentDetailPage } from "./pages/staff/StudentDetailPage";
 
 /** Sends each role to the screen where their job starts. */
 function Home() {
@@ -42,7 +45,10 @@ export function App() {
           {/* Bursar and admin */}
           <Route element={<RequireRole roles={["admin", "staff"]} />}>
             <Route path="/collections" element={<CollectionsPage />} />
+            <Route path="/payments" element={<PaymentsPage />} />
             <Route path="/students" element={<StudentsPage />} />
+            <Route path="/students/:studentId" element={<StudentDetailPage />} />
+            <Route path="/classes/:classId" element={<ClassDetailPage />} />
           </Route>
 
           {/* Parent */}

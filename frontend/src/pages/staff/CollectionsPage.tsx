@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { PayForm } from "../../components/PayForm";
 import {
@@ -175,7 +175,12 @@ function Row({
     <>
       <tr className={isPaying ? "bg-slate-50" : undefined}>
         <Td label="Student">
-          <span className="font-medium text-slate-900">{line.student.full_name}</span>
+          <Link
+            to={`/students/${line.student.id}`}
+            className="font-medium text-slate-900 hover:text-indigo-600"
+          >
+            {line.student.full_name}
+          </Link>
           <span className="ml-2 font-mono text-xs text-slate-400">
             {line.student.admission_number}
           </span>

@@ -107,6 +107,29 @@ export function useAssignments(
   });
 }
 
+export function useStudent(studentId: number | undefined) {
+  return useQuery({
+    queryKey: ["student", studentId] as const,
+    queryFn: () => api.get<Student>(`/students/${studentId}`),
+    enabled: studentId !== undefined,
+  });
+}
+
+export function usePayments(
+  params: ListParams & {
+    fee_assignment_id?: number;
+    student_id?: number;
+    class_id?: number;
+    method?: string;
+    recorded_by_id?: number;
+  } = {},
+) {
+  return useQuery({
+    queryKey: keys.payments(params),
+    queryFn: () => api.get<Page<Payment>>(`/payments${query({ limit: 25, ...params })}`),
+  });
+}
+
 export function useStudentBalance(
   studentId: number | undefined,
   options: Pick<UseQueryOptions<StudentBalance>, "refetchInterval"> = {},
