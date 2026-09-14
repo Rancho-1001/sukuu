@@ -15,12 +15,13 @@ services:
     # uv is what the project uses locally; pip install from the same pinned
     # requirements keeps the deployed set identical to the tested one.
     buildCommand: pip install -r requirements.txt
-    # Migrations run here, not in the build. A build can run for a preview or
-    # be retried; a release runs once, after a successful build, before any
-    # traffic reaches the new version. Running `alembic upgrade head` in the
-    # build step would migrate whatever database the build happened to point
-    # at, which for a preview is the production one.
-    preDeployCommand: alembic upgrade head
+    # No preDeployCommand: Render rejects it on the free tier ("pre-deploy
+    # command is not supported for free tier services"). Migrations therefore
+    # run from a laptop against Supabase *before* a schema-changing commit is
+    # pushed -- see docs/deploy.md. Not in the build step either: a build can
+    # run for a preview or be retried, and would migrate whatever database it
+    # happened to point at. On a paid instance, restore:
+    #   preDeployCommand: alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
