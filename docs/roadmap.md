@@ -247,13 +247,21 @@ Vercel (frontend) + Render (API) + Supabase (Postgres). Runbook in [deploy.md](d
 - [x] CORS locked to the production origin, not `*` — the API refuses to start on a wildcard
 - [x] Confirm no secret was ever committed; rotate anything that leaked — history is clean
 - [x] Deploy configuration written: `render.yaml`, `frontend/vercel.json`, `.python-version`
-- [ ] Managed Postgres provisioned — **needs a Supabase account**
-- [ ] Backend deployed with env vars set and migrations run on release — **needs a Render account**
-- [ ] Frontend deployed to Vercel, pointed at the live API — **needs a Vercel account**
-- [ ] Stripe webhook endpoint registered against the deployed URL — a *different* `whsec_`
-      from the one `stripe listen` prints
-- [ ] Demo data seeded, with one login per role — run from a laptop; free Render has no shell
-- [ ] Smoke test the full loop in production, including a card payment
+- [x] Managed Postgres provisioned — Supabase, us-east-1, session pooler
+- [x] Backend deployed with env vars set — Render, `https://sukuu-api.onrender.com`
+- [x] Frontend deployed to Vercel, pointed at the live API — `https://sukuu-pi.vercel.app`
+- [x] Stripe webhook endpoint registered against the deployed URL
+- [x] Demo data seeded, with one login per role — from a laptop; free Render has no shell
+- [x] Smoke test the full loop in production, including a card payment — a real Stripe-signed
+      `checkout.session.completed` recorded $30.00 against a bill, and resending the same event
+      recorded nothing
+
+> Two things went wrong at the webhook step, both worth knowing. The signing secret was
+> pasted **without its `whsec_` prefix** — the prefix is part of the HMAC key, not a label,
+> and every delivery was rejected until it was restored. And Render's environment page edits
+> did not reliably restart the service; a manual deploy after each save was what made them
+> take. The API now logs the shape of each Stripe secret at startup so the first of these
+> explains itself.
 
 > Demo accounts that let a stranger delete the data leave you with an empty demo the week
 > someone actually looks. Reseed on a schedule, or make the public logins read-mostly.
@@ -278,7 +286,7 @@ Vercel (frontend) + Render (API) + Supabase (Postgres). Runbook in [deploy.md](d
 > login page says so rather than showing a spinner. A Stripe webhook that times out against
 > a sleeping service gets retried and lands, because it is idempotent on `stripe_event_id`.
 
-**Done when** a stranger with the URL can log in as all three roles and pay a fee.
+**Done when** a stranger with the URL can log in as all three roles and pay a fee. ✅
 
 ---
 

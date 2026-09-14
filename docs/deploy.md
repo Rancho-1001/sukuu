@@ -118,6 +118,15 @@ This is a **different secret** from the one `stripe listen` printed locally. Usi
 local one means every real delivery fails signature verification, which looks like a
 code problem and is not.
 
+**Paste the whole thing, `whsec_` included.** The prefix is part of the HMAC key. Without
+it the API logs `Rejected a Stripe webhook with an invalid signature` on every delivery —
+this cost an hour on the first deploy. The startup log now says
+`STRIPE_WEBHOOK_SECRET looks right: whsec_… (length 38)` when it is correct, and names
+the problem when it is not.
+
+**After saving any environment variable on Render, run Manual Deploy → Deploy latest
+commit.** Saving alone did not reliably restart the service.
+
 ## 6. Smoke test
 
 Nothing here is a substitute for the loop actually working:
