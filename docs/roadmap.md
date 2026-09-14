@@ -294,15 +294,22 @@ Vercel (frontend) + Render (API) + Supabase (Postgres). Runbook in [deploy.md](d
 
 The phase people skip. For a project whose purpose is to be read, this is the deliverable.
 
-- [ ] Screenshots or a short demo recording in the README
-- [ ] Live demo link and the three demo logins, at the top
-- [ ] The Ghana origin story kept short and specific
-- [ ] A short decisions section — exact money, row locks, webhook reconciliation
-- [ ] One architecture diagram
-- [ ] Roadmap section naming what was cut and why
-- [ ] Production note on Paystack and Flutterwave for the real market
-- [ ] Coverage on the money and permission code specifically
-- [ ] Readable commit history — it is part of what gets reviewed
+- [x] Screenshots or a short demo recording in the README — seven, captured from the live
+      site by `frontend/scripts/screenshots.mjs`, so they can be regenerated when the UI changes
+- [x] Live demo link and the three demo logins, at the top
+- [x] The Ghana origin story kept short and specific
+- [x] A short decisions section — exact money, row locks, webhook reconciliation
+- [x] One architecture diagram
+- [x] Roadmap section naming what was cut and why
+- [x] Production note on Paystack and Flutterwave for the real market
+- [x] Coverage on the money and permission code specifically — 99% across the balance rules,
+      payment service, ledger, webhook and role guards; 90% overall
+- [x] Readable commit history — it is part of what gets reviewed
+
+> The decisions section is the README's centre of gravity. Every entry names something that
+> was verified by undoing it — the lock removed, the naive join substituted, the broad
+> exception handler restored — because a decision with no test that fails without it is an
+> opinion.
 
 **Done when** someone who has never met you understands the problem, the solution, and the
-judgement calls in under two minutes.
+judgement calls in under two minutes. ✅

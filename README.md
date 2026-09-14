@@ -1,184 +1,194 @@
-# Sukuu — School Fee Management System
+# Sukuu — school fee management
 
 [![CI](https://github.com/Rancho-1001/sukuu/actions/workflows/ci.yml/badge.svg)](https://github.com/Rancho-1001/sukuu/actions/workflows/ci.yml)
 
-> A school management platform that lets administrators track student fees (tuition, feeding, uniforms), lets parents pay online and in installments, and gives staff a clean view of who owes what.
+Fees, installments, and payments for a primary school — with three roles the server actually enforces, and money that is never a float.
 
-**Sukuu** means "school" in Twi. This was built after teaching in Ghana, where fee and feeding-payment tracking was largely manual and error-prone — spreadsheets, paper receipt books, and a bursar reconciling by hand.
+**Live demo: [sukuu-pi.vercel.app](https://sukuu-pi.vercel.app)**
 
-> **Status:** In development. See [docs/spec.md](docs/spec.md) for the full specification and [Roadmap](#roadmap) for what is deliberately out of scope.
+| Role | Email | Password |
+|---|---|---|
+| Administrator | `admin@sukuu.demo` | `sukuu-demo` |
+| Bursar | `bursar@sukuu.demo` | `sukuu-demo` |
+| Parent | `parent@sukuu.demo` | `sukuu-demo` |
 
----
+The API sleeps on free hosting after fifteen quiet minutes; the first request of the day can take a minute, and the page says so. Card payments are Stripe test mode — use `4242 4242 4242 4242` with any future date. No real money moves.
 
-## What this project is about
+![Admin dashboard: collected and outstanding across the school, per class](docs/screenshots/dashboard.png)
 
-Three things, deliberately:
+## Why this exists
 
-1. **Full-stack with real payments** — React frontend, FastAPI backend, Postgres, Stripe integration with webhook-driven reconciliation.
-2. **Access control that is actually enforced** — three roles with real permission boundaries in backend middleware, JWT auth, and an audit log. Not UI-only guards.
-3. **Financial correctness** — partial payments, installments, overpayment rejection under concurrency, and money stored as exact decimals rather than floats.
+I taught in Ghana. Fee collection ran on a paper receipt book and a spreadsheet, and the bursar reconciled the two by hand at the end of each term. Parents paid in installments — a bit at the start of term, more when a harvest came in — and nobody could say with confidence who still owed what. *Sukuu* is "school" in Twi.
 
-## Core loop
+This is the system that office needed, built to demonstrate three things:
+
+1. **Financial correctness.** Installments, partial payments, and a guarantee that two payments cannot overpay a fee even when they arrive at the same instant.
+2. **Access control that is enforced, not implied.** Three roles with boundaries in the API, an audit trail, and a parent who cannot see another family's child no matter what URL they type.
+3. **Real payments, reconciled properly.** Stripe Checkout, with the ledger written only by the signed webhook — never by the browser coming back.
+
+## What it does
 
 ```
-Admin sets up school (students, classes, fee types)
-   → assigns fees to students
-      → parents/staff see what's owed
-         → payments recorded (online via Stripe, or cash by staff)
-            → dashboard shows paid vs. outstanding
+Admin sets up the school (classes, students, fee types)
+  → charges a fee to one student, or a whole class at once
+    → parents see itemised fees and what is still owed
+      → payments arrive: cash at the office, or card via Stripe
+        → the dashboard shows collected against outstanding, per class
 ```
 
-## Roles & permissions
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/parent-fees.png" alt="A parent's itemised fees for one child, with a partial-payment form open"><br><sub><b>Parent</b> — itemised fees per child, pay in full or choose an amount.</sub></td>
+<td width="50%"><img src="docs/screenshots/bursar-collections.png" alt="The bursar's outstanding-fees list with a cash payment form open"><br><sub><b>Bursar</b> — who owes what, and a cash payment recorded in place.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/payment-confirmed.png" alt="Payment confirmed page after a Stripe checkout"><br><sub>After Stripe: the page says <i>confirmed</i> only once the webhook has landed.</sub></td>
+<td><img src="docs/screenshots/mobile-collections.png" alt="The bursar's list on a phone, as stacked cards" height="420"><br><sub>A bursar at a school gate is on a phone. Tables stack into cards.</sub></td>
+</tr>
+</table>
 
-| Capability | Admin | Staff/Bursar | Parent |
+## How it fits together
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        FE[React + Vite<br/>TanStack Query]
+    end
+    subgraph Render
+        API[FastAPI<br/>JWT · role guards · audit]
+    end
+    subgraph Supabase
+        DB[(Postgres<br/>NUMERIC money · row locks)]
+    end
+    Stripe[Stripe Checkout]
+
+    FE -- bearer token --> API
+    API --> DB
+    FE -- redirect --> Stripe
+    Stripe -- signed webhook --> API
+    Stripe -. success URL .-> FE
+```
+
+The dotted line is the one that matters: the browser's return from Stripe is a *hint*, and the only thing that writes a payment is the signed webhook.
+
+## Decisions worth reading
+
+These are the judgement calls. Each has a test that fails if the decision is undone, and most were verified by undoing them on purpose.
+
+**Money is never a float — anywhere.** `NUMERIC(12,2)` in Postgres, `Decimal` in Python, and a *string* on the wire (`"250.00"`), because a JSON number becomes an IEEE 754 double the moment a browser parses it. In the frontend, nothing outside one module formats an amount, and comparisons go through integer cents. The one place a float exists is chart geometry, where it never reaches the screen.
+
+**Two payments cannot overpay a fee, even at the same instant.** The payment service takes `SELECT … FOR UPDATE` on the fee assignment — the *parent* row, because the dangerous write is a new payment row, and a row that does not exist yet cannot be locked. Existing payments are read *after* the lock, never before. The test uses two independent database connections; through one session it passes whether or not the lock exists. I removed the lock and watched it fail.
+
+**The ledger is written by the webhook, never by the redirect.** Anyone can type the success URL. So the success page does not say "paid" — it says "confirming", and watches the balance move past what it was when checkout began. Replays are no-ops via a unique index on `stripe_event_id`, proved in production by having Stripe redeliver the same event. An integrity error at that commit is only treated as a duplicate if the constraint is *that* index; anything else re-raises, because answering "already recorded" to a foreign-key failure would tell Stripe the money was handled and lose it behind a 200.
+
+**Money that arrives but cannot be applied is flagged, not refused.** A bursar records cash while a parent is on the payment page; the card payment then overpays. A 409 would be a lie — the card is already charged and there is no smaller amount to retry. It is audited as `payment.stripe_needs_refund` for a human, and the invariant holds.
+
+**404, not 403, for another family's child.** A 403 confirms the record exists and lets a parent walk the IDs to learn the school roll. Role guards live in the API; the UI hiding a button is signposting, not security.
+
+**Totals are computed without the fan-out.** Joining students to assignments to payments produces one row per *payment*, so a 250.00 bill paid in three installments counts as 750.00. The naive join agrees with a hand-check for everyone who paid in one go and is wrong only for installments — the feature the product exists for. Payments are collapsed to one row per assignment first. Verified by substituting the naive join: a class of three read 600.00 instead of 300.00.
+
+**The login rate limiter counts rows in `audit_log`.** No new infrastructure, and the count is shared across processes — an in-memory counter hands an attacker one full allowance per worker.
+
+**There are no DELETE endpoints.** Classes archive, students go inactive, fee types cannot be removed. A public demo cannot be wiped, structurally rather than carefully.
+
+**CORS refuses to start on a wildcard.** `allow_credentials` is on, and browsers reject wildcard-with-credentials anyway — so a `*` would make every cross-origin request fail in a way that looks like a frontend bug. Failing at startup names the cause.
+
+## Roles and permissions
+
+| Capability | Admin | Bursar | Parent |
 |---|:---:|:---:|:---:|
-| Manage students & classes | ✅ | ❌ | ❌ |
-| Define/edit fee structures | ✅ | ❌ | ❌ |
-| Assign fees to students/classes | ✅ | ❌ | ❌ |
-| Record offline (cash) payments | ✅ | ✅ | ❌ |
-| View all payments & reports | ✅ | ✅ | ❌ |
-| View own child's fees only | — | — | ✅ |
-| Pay fees online (Stripe) | — | — | ✅ |
-| View own payment history | — | — | ✅ |
+| Manage students and classes | ✅ | ❌ | ❌ |
+| Define fee types; charge fees | ✅ | ❌ | ❌ |
+| Record cash payments | ✅ | ✅ | ❌ |
+| View all payments and reports | ✅ | ✅ | ❌ |
+| View own children's fees and history | — | — | ✅ |
+| Pay online | — | — | ✅ |
 
-Every boundary above is enforced server-side. The UI hides what a role cannot do; the API refuses it.
+Every deny case has a test that fails if you delete the guard.
 
-## Tech stack
+## Testing
 
-| Layer | Choice |
-|---|---|
-| Backend | FastAPI (Python 3.14) |
-| Database | PostgreSQL |
-| ORM / migrations | SQLAlchemy + Alembic |
-| Frontend | React + Vite |
-| Auth | PyJWT + bcrypt, with role-based dependency guards |
-| Payments | Stripe (test mode), webhook-driven |
-| Deploy | Render/Railway (API + DB), Vercel (frontend) |
-
-## Data model
-
-Seven tables: `users`, `students`, `classes`, `fee_types`, `fee_assignments`, `payments`, `audit_log`.
-
-The centre of the model is **`fee_assignments` has many `payments`** — that one-to-many is what makes installments possible.
-
-```
-outstanding = fee_assignment.amount − SUM(payments.amount_paid)
-```
-
-Two rules the implementation takes seriously:
-
-- **Money is never a float.** Amounts are `NUMERIC(12,2)` in Postgres and `Decimal` in Python.
-- **Overpayment is rejected under concurrency.** The balance check and the payment insert happen in one transaction with a row lock on the fee assignment, so two simultaneous payments cannot both pass the check.
-
-## Project structure
-
-```
-sukuu/
-├── backend/
-│   ├── app/
-│   │   ├── api/routes/    # HTTP endpoints, thin
-│   │   ├── core/          # config, security, JWT, role guards
-│   │   ├── db/            # session, base, migrations
-│   │   ├── models/        # SQLAlchemy models
-│   │   ├── schemas/       # Pydantic request/response models
-│   │   └── services/      # business logic (balances, payments, audit)
-│   └── tests/
-│       ├── unit/          # pure logic, no I/O
-│       ├── api/           # HTTP behaviour via TestClient
-│       └── integration/   # real Postgres, marked `db`
-├── frontend/              # React + Vite
-└── docs/
-    └── spec.md            # full project specification
-```
-
-## Getting started
-
-Prerequisites: Python 3.14, Node 20+, PostgreSQL 16+.
-
-If you don't have Python 3.14, [uv](https://docs.astral.sh/uv/) installs it without touching your system Python or needing admin rights:
+**465 backend tests, 85 frontend.** Coverage across the money and permission code — the balance rules, the payment service, the ledger queries, the webhook, the role guards — is **99%** (513 statements, 6 missed); 90% overall.
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh && uv python install 3.14
+cd backend && pytest                     # everything, against real Postgres
+cd backend && pytest tests/unit -q       # the money rules alone, no database
+cd frontend && npm test
 ```
 
-```bash
-git clone https://github.com/Rancho-1001/sukuu.git
-cd sukuu
-```
+Three conventions carry the suite:
 
-**Backend**
+- **No SQLite substitute.** Tests run against the same Postgres the app uses. SQLite has neither `NUMERIC` semantics nor `SELECT … FOR UPDATE` — the two things the financial tests exist to check.
+- **Every list endpoint asserts its query count stays flat** between a one-row page and a seven-row one. An N+1 is a count that tracks the result size; comparing two page sizes catches it without hard-coding a number.
+- **Defences are verified by breaking them.** The lock, the fan-out fix, the idempotency guard, the form-reset bug — each has a test that was confirmed to fail with the defence removed before being kept.
+
+The Stripe webhook tests sign their payloads with the real HMAC scheme rather than patching verification out, so the tampered-body and stale-timestamp cases are actually exercised.
+
+## Running it locally
+
+Prerequisites: Python 3.14, Node 20+, PostgreSQL 16+. [uv](https://docs.astral.sh/uv/) installs Python 3.14 without touching the system one.
 
 ```bash
 cd backend
 uv venv --python 3.14 && source .venv/bin/activate
 uv pip install -r requirements-dev.txt
-cp .env.example .env    # then fill in DATABASE_URL, JWT_SECRET, Stripe keys
+cp .env.example .env      # DATABASE_URL, JWT_SECRET, Stripe test keys
+alembic upgrade head && python -m app.db.seed
 uvicorn app.main:app --reload
 ```
 
-API docs are then at `http://localhost:8000/docs`.
-
-**Frontend**
-
 ```bash
 cd frontend
-npm install
+npm install && cp .env.example .env
 npm run dev
 ```
 
-## Testing
+API docs at `http://localhost:8000/docs`. For a real card payment locally, `stripe listen --forward-to localhost:8000/webhooks/stripe` and put the secret it prints in `.env`.
 
-```bash
-cd backend
-pytest                       # everything
-pytest tests/unit -q         # pure logic, no database needed
-pytest -m db                 # only the tests that need Postgres
-pytest --cov                 # with a coverage report
-ruff check . && ruff format --check .
+Deploying it — Vercel, Render, Supabase, and the two things that went wrong the first time — is in [docs/deploy.md](docs/deploy.md).
+
+## Project structure
+
+```
+backend/app/
+├── api/routes/    # HTTP endpoints, thin; every guard is a dependency
+├── api/deps.py    # get_current_user, require_role, get_own_student
+├── core/          # settings (CORS refuses wildcards), JWT, bcrypt
+├── db/            # session, migrations, the seed
+├── models/        # seven tables; money is NUMERIC(12,2)
+├── schemas/       # Pydantic in and out; Money serialises as a string
+└── services/
+    ├── balances.py         # the money rules, pure, no database
+    ├── payments.py         # the locked write path
+    ├── ledger.py           # aggregations without the fan-out
+    ├── stripe_gateway.py   # the only file that touches the Stripe SDK
+    └── rate_limit.py       # failed logins, counted from the audit log
+frontend/src/
+├── lib/money.ts   # the one door for formatting an amount
+├── lib/api.ts     # token attachment; the two kinds of 401
+├── auth/          # context and guards — what is shown, never what is allowed
+└── pages/         # admin, staff, parent
 ```
 
-The suite is split three ways by what each layer needs:
+## What was cut, and why
 
-- **`tests/unit/`** — the money rules in `app/services/balances.py`. No database, no HTTP, no fixtures. This is where partial payments, exact payoffs, rounding, and overpayment rejection are pinned down, because that logic is the part of the product most expensive to get wrong.
-- **`tests/api/`** — endpoint behaviour through FastAPI's `TestClient`, including the role boundaries. A permission test that only checks the UI proves nothing; these hit the API directly.
-- **`tests/integration/`** — anything needing real SQL, marked `db`. These **skip** when no Postgres is reachable so local runs stay useful, and CI runs a Postgres 16 service container so they cannot skip silently where it counts.
-
-Two deliberate choices worth naming:
-
-**No SQLite substitute.** Tests run against the same Postgres the app uses. Swapping in SQLite would break `NUMERIC` semantics and `SELECT ... FOR UPDATE` — precisely the two things the financial tests exist to verify.
-
-**Tests for unwritten code skip themselves, then activate.** `tests/integration/test_payment_concurrency.py` guards on `importorskip("app.services.payments")`, so it stays quiet until that module exists and then starts running on its own. Nothing has to be un-skipped by hand and forgotten.
-
-CI runs lint, format check, and the full suite against Python 3.14 and Postgres 16 on every push and pull request.
-
-## Build order
-
-The task-level checklist lives in [docs/roadmap.md](docs/roadmap.md).
-
-1. **Week 1** — Schema, migrations, JWT auth, role guards, and audit logging. Security scaffolding goes in *before* the endpoints so nothing has to be retrofitted.
-2. **Week 2** — Admin CRUD (students, classes, fee types, assignments) behind those guards, plus the outstanding-balance service and its tests.
-3. **Week 3** — Parent payment flow, Stripe checkout, webhook reconciliation, installments, and the dashboard.
-
-## Roadmap
-
-Deliberately **not** in v1:
-
-- Attendance tracking
-- Grades / report cards
-- Timetables & scheduling
-- SMS / email fee reminders *(the most obvious next feature)*
-- Multi-school / multi-tenant support
-- Refunds & reversals
-- Feeding as a prepaid top-up balance
-- Localized payment gateways (Paystack / Flutterwave)
+- **Opening a user account.** Families arrive through the seed script; an admin cannot onboard a new one end to end. Doing it properly needs creation, an invite, and a password-set flow — a larger piece than the parent picker that exposed the gap, and not something to smuggle in behind one.
+- **Refunds and reversals.** The webhook flags an unapplyable payment for a human. A production system would call Stripe's refund API there; doing it automatically is not something to write without someone to answer for it.
+- **Two guardians per student.** v1 models one parent. Real households often have two; that is a join table.
+- **SMS and email reminders** — the most obvious next feature, and the one that would most change collection rates.
+- **Attendance, grades, timetables, multi-school.** Not this product.
 
 ## Production notes
 
-**Payment gateway.** Stripe does not operate in Ghana directly, so this demo uses Stripe USD test mode — the standard choice for a portfolio build. A production deployment for the target market would use **Paystack** or **Flutterwave**, both of which support mobile money, which is how most school fees actually get paid there.
+**Payment gateway.** Stripe does not operate in Ghana, which is why the demo charges USD in test mode. A deployment for the real market would use **Paystack** or **Flutterwave** — both support mobile money, which is how most school fees there are actually paid. The Stripe SDK is confined to one file so that swap is a file, not a search.
 
-**Currency.** The demo is USD. A production version would be locale-aware and denominated in GHS.
+**Currency.** The demo is USD. Production would be GHS, and locale-aware.
 
-**Parent–student relationship.** v1 models one parent per student. Real households often have two guardians; that would become a join table in v2.
+**Hosting.** Free Render instances sleep, and free Render Postgres *expires after 30 days* — which is why the database is Supabase. Both are in the deploy notes.
+
+## History
+
+The commit history is written to be read; each message explains the decision, not just the change. Phases 0–7 are checked off with their judgement calls in [docs/roadmap.md](docs/roadmap.md).
 
 ## License
 

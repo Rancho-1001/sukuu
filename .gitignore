@@ -32,3 +32,6 @@ yarn-error.log*
 .idea/
 .vscode/
 *.swp
+
+# pytest-cov data file
+.coverage
