@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import PaymentMethod
+from app.models.enums import PaymentMethod, PaymentProvider
 from app.schemas.classes import ClassSummary
 from app.schemas.common import Money, MoneyTotal, Page
 from app.schemas.fee_assignments import FeeAssignmentOut
@@ -19,9 +19,9 @@ class CashPaymentCreate(BaseModel):
 
     Note what is *not* here: ``method``. The route records cash and only cash.
     Accepting a method from the client would let a member of staff file a
-    payment as "stripe" with no Stripe transaction behind it, which is the one
+    payment as "card" with no card transaction behind it, which is the one
     lie this ledger must not be able to tell about itself. Online payments
-    arrive from the webhook in Phase 5 and never from a form.
+    arrive from the processor's webhook and never from a form.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -61,6 +61,7 @@ class PaymentOut(BaseModel):
     fee_assignment_id: int
     amount_paid: Money
     method: PaymentMethod
+    provider: PaymentProvider | None = None
     paid_at: datetime
     recorded_by: RecordedBy | None = None
     fee_assignment: PaidFor
@@ -136,6 +137,7 @@ class CheckoutSessionOut(BaseModel):
     checkout_url: str
     fee_assignment_id: int
     amount: Money
+    provider: PaymentProvider
 
 
 class ClassCollectionRow(BaseModel):
@@ -160,3 +162,17 @@ class SchoolSummaryOut(BaseModel):
     paid: MoneyTotal
     outstanding: MoneyTotal
     classes: list[ClassCollectionRow]
+
+
+class GatewayOut(BaseModel):
+    """Which processor this deployment pays through.
+
+    Enough for the UI to name it, list what a parent can pay with, and say
+    "test mode" only when it is true.
+    """
+
+    provider: PaymentProvider
+    display_name: str
+    currency: str
+    methods: list[PaymentMethod]
+    test_mode: bool

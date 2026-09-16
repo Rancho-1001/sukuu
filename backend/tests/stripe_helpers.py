@@ -41,6 +41,7 @@ def event_body(
     payment_status: str = "paid",
     session_id: str = "cs_test_1",
     payment_intent: str | None = "pi_test_1",
+    currency: str = "usd",
 ) -> bytes:
     metadata = {}
     if fee_assignment_id is not None:
@@ -61,7 +62,7 @@ def event_body(
                     "object": "checkout.session",
                     "payment_status": payment_status,
                     "amount_total": amount_total,
-                    "currency": "usd",
+                    "currency": currency,
                     "payment_intent": payment_intent,
                     "metadata": metadata,
                 }

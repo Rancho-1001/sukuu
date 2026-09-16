@@ -50,10 +50,10 @@ app.add_middleware(
 # prefix and the length - never the value.
 def _describe_secret(name: str, value: str, expected_prefix: str) -> None:
     if not value or value.endswith("placeholder"):
-        logger.warning("%s is not set - Stripe will not work", name)
+        logger.warning("%s is not set - its gateway will not work", name)
     elif not value.startswith(expected_prefix):
         logger.warning(
-            "%s does not start with %r (length %d) - every Stripe delivery will be rejected",
+            "%s does not start with %r (length %d) - every delivery will be rejected",
             name,
             expected_prefix,
             len(value),
@@ -62,8 +62,12 @@ def _describe_secret(name: str, value: str, expected_prefix: str) -> None:
         logger.info("%s looks right: %s… (length %d)", name, expected_prefix, len(value))
 
 
+logger.info(
+    "Payment gateway: %s, charging in %s", settings.payment_gateway.value, settings.currency.upper()
+)
 _describe_secret("STRIPE_WEBHOOK_SECRET", settings.stripe_webhook_secret, "whsec_")
 _describe_secret("STRIPE_SECRET_KEY", settings.stripe_secret_key, "sk_")
+_describe_secret("PAYSTACK_SECRET_KEY", settings.paystack_secret_key, "sk_")
 logger.info("CORS origins: %s", settings.cors_origins)
 
 app.include_router(auth.router)

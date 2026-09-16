@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev", "--", "--port", "5173", "--strictPort"],
       "port": 5173,
       "cwd": "frontend"
+    },
+    {
+      "name": "sukuu-api",
+      "runtimeExecutable": ".venv/bin/uvicorn",
+      "runtimeArgs": ["app.main:app", "--port", "8000"],
+      "port": 8000,
+      "cwd": "backend"
     }
   ]
 }

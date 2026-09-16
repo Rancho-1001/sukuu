@@ -1,5 +1,11 @@
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.models.enums import PaymentProvider
+
+# What each processor is charged in when nothing says otherwise. Stripe is the
+# North American gateway; Paystack is the Ghanaian one.
+DEFAULT_CURRENCY = {PaymentProvider.STRIPE: "usd", PaymentProvider.PAYSTACK: "ghs"}
 
 
 class Settings(BaseSettings):
@@ -9,17 +15,33 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+
+    # Which processor a parent's pay button opens. Stripe for the United
+    # States and Canada; Paystack - cards and mobile money - for Ghana. Each
+    # brings its own secrets, and the API refuses to start if the chosen one
+    # has none: a gateway with no secret cannot verify a webhook, and an HMAC
+    # against an empty key is a signature anyone can produce.
+    payment_gateway: PaymentProvider = PaymentProvider.STRIPE
+    # Lower-case ISO code. Defaults per gateway; set it to override.
+    payment_currency: str = Field(
+        default="", validation_alias=AliasChoices("PAYMENT_CURRENCY", "STRIPE_CURRENCY")
+    )
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    # One key for both the API and webhook signatures - that is how Paystack
+    # works, not a shortcut.
+    paystack_secret_key: str = ""
 
-    # Stripe does not operate in Ghana, so a real deployment for this market
-    # would use Paystack or Flutterwave; Stripe is here because test mode makes
-    # the payment flow demonstrable. Charging in USD follows from that - the
-    # money rules and the reconciliation are the transferable part, not the
-    # processor.
-    stripe_currency: str = "usd"
-    stripe_success_url: str = "http://localhost:5173/payments/success"
-    stripe_cancel_url: str = "http://localhost:5173/payments/cancelled"
+    # Where the processor sends a parent afterwards. The old STRIPE_* names
+    # still work so a deployment does not break on the rename.
+    payment_success_url: str = Field(
+        default="http://localhost:5173/payments/success",
+        validation_alias=AliasChoices("PAYMENT_SUCCESS_URL", "STRIPE_SUCCESS_URL"),
+    )
+    payment_cancel_url: str = Field(
+        default="http://localhost:5173/payments/cancelled",
+        validation_alias=AliasChoices("PAYMENT_CANCEL_URL", "STRIPE_CANCEL_URL"),
+    )
     # One origin, or several separated by commas. A deployed API needs the
     # frontend's real domain here; CORS is the only thing standing between this
     # API and any page on the internet making authenticated requests to it with
@@ -37,7 +59,13 @@ class Settings(BaseSettings):
     # for every request, which turns the per-IP limit off.
     trust_proxy_headers: bool = False
 
-    @field_validator("stripe_secret_key", "stripe_webhook_secret", "jwt_secret", "database_url")
+    @field_validator(
+        "stripe_secret_key",
+        "stripe_webhook_secret",
+        "paystack_secret_key",
+        "jwt_secret",
+        "database_url",
+    )
     @classmethod
     def _strip_pasted_whitespace(cls, value: str) -> str:
         """A trailing newline from a copy-paste is invisible in a dashboard and
@@ -62,6 +90,32 @@ class Settings(BaseSettings):
                 "Set it to the deployed frontend's URL."
             )
         return value
+
+    @model_validator(mode="after")
+    def _the_chosen_gateway_has_its_secrets(self) -> Settings:
+        """Refuse to start with a gateway that cannot verify its own webhooks."""
+        missing = [name for name, value in self.gateway_secrets.items() if not value]
+        if missing:
+            raise ValueError(
+                f"PAYMENT_GATEWAY={self.payment_gateway.value} needs {', '.join(missing)}. "
+                "Set them, or choose a gateway whose secrets are set."
+            )
+        return self
+
+    @property
+    def gateway_secrets(self) -> dict[str, str]:
+        """The environment variables the chosen gateway lives on, by name."""
+        if self.payment_gateway is PaymentProvider.PAYSTACK:
+            return {"PAYSTACK_SECRET_KEY": self.paystack_secret_key}
+        return {
+            "STRIPE_SECRET_KEY": self.stripe_secret_key,
+            "STRIPE_WEBHOOK_SECRET": self.stripe_webhook_secret,
+        }
+
+    @property
+    def currency(self) -> str:
+        """Lower-case ISO code the chosen gateway charges in."""
+        return (self.payment_currency or DEFAULT_CURRENCY[self.payment_gateway]).lower()
 
     @property
     def cors_origins(self) -> list[str]:

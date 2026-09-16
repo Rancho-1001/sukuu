@@ -34,15 +34,26 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   localStorage.setItem("sukuu.token", "t");
   responses = [];
-  fetchMock = vi.fn().mockImplementation(() => {
+  fetchMock = vi.fn().mockImplementation((url: string) => {
+    const json = (body: unknown) =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    if (String(url).endsWith("/payments/gateway")) {
+      return json({
+        provider: "paystack",
+        display_name: "Paystack",
+        currency: "GHS",
+        methods: ["mobile_money", "card"],
+        test_mode: true,
+      });
+    }
     // Each poll gets the next balance in the script; the last one repeats.
     const paid = responses.length > 1 ? responses.shift()! : responses[0];
-    return Promise.resolve(
-      new Response(JSON.stringify(balanceWith(paid)), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    return json(balanceWith(paid));
   });
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -55,7 +66,7 @@ afterEach(() => {
 describe("the success page", () => {
   it("does not claim success on arrival - only the webhook can", async () => {
     // The balance still shows what it did before checkout: the webhook has
-    // not landed. Saying "paid" here would be saying it on Stripe's redirect,
+    // not landed. Saying "paid" here would be saying it on the processor's redirect,
     // which anyone can issue by typing the URL.
     responses = ["20.00"];
     renderWithProviders(<PaymentSuccessPage />, {
@@ -65,6 +76,19 @@ describe("the success page", () => {
 
     expect(await screen.findByText("Confirming your payment")).toBeInTheDocument();
     expect(screen.queryByText("Payment confirmed")).not.toBeInTheDocument();
+  });
+
+  it("names the processor the API says it is, not one baked into the build", async () => {
+    // Saying "Stripe" on a Paystack deployment would be the page telling a
+    // parent something false about their own money.
+    responses = ["20.00"];
+    renderWithProviders(<PaymentSuccessPage />, {
+      route: "/payments/success?student=7&fee=3&paid_before=20.00",
+      role: "parent",
+    });
+
+    expect(await screen.findByText(/Paystack has taken the payment/)).toBeInTheDocument();
+    expect(screen.queryByText(/Stripe/)).not.toBeInTheDocument();
   });
 
   it("confirms once the balance moves past paid_before", async () => {
@@ -127,7 +151,9 @@ describe("the success page", () => {
     });
 
     expect(await screen.findByText("Thank you")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    // No balance to poll: nothing names a student. Only the gateway is asked.
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls.filter((url) => !url.endsWith("/payments/gateway"))).toEqual([]);
   });
 });
 

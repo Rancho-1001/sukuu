@@ -21,8 +21,9 @@ from decimal import Decimal
 import pytest
 from sqlalchemy import select
 
-from app.models import AuditLog, Payment, PaymentMethod, UserRole
-from app.services.stripe_gateway import CheckoutSession, to_minor_units
+from app.models import AuditLog, Payment, PaymentMethod, PaymentProvider, UserRole
+from app.services.gateways import to_minor_units
+from tests.gateway_helpers import use_fake_gateway
 from tests.stripe_helpers import deliver, event_body
 
 pytestmark = pytest.mark.db
@@ -30,18 +31,7 @@ pytestmark = pytest.mark.db
 
 @pytest.fixture
 def stripe_calls(monkeypatch):
-    from app.api.routes import checkout
-
-    calls = []
-
-    def fake_create(**kwargs):
-        calls.append(kwargs)
-        return CheckoutSession(
-            id=f"cs_test_{len(calls)}", url=f"https://checkout.stripe.com/c/pay/cs_{len(calls)}"
-        )
-
-    monkeypatch.setattr(checkout.stripe_gateway, "create_checkout_session", fake_create)
-    return calls
+    return use_fake_gateway(monkeypatch).calls
 
 
 @pytest.fixture
@@ -100,13 +90,14 @@ def test_the_payment_lands_even_though_the_browser_never_came_back(
 
     history = api.get(f"/students/{bill.student_id}/payments", headers=headers).json()
     assert history["total"] == 1
-    assert history["items"][0]["method"] == "stripe"
+    assert history["items"][0]["method"] == "card"
     assert history["items"][0]["recorded_by"] is None
 
     payment = db_session.scalar(select(Payment).where(Payment.fee_assignment_id == bill.id))
-    assert payment.method is PaymentMethod.STRIPE
+    assert payment.method is PaymentMethod.CARD
+    assert payment.provider is PaymentProvider.STRIPE
     assert payment.amount_paid == Decimal("125.00")
-    assert payment.stripe_event_id == "evt_flow_1"
+    assert payment.provider_event_id == "evt_flow_1"
 
 
 def test_the_rest_can_be_paid_in_a_second_session(
@@ -194,3 +185,74 @@ def test_an_abandoned_checkout_leaves_the_bill_exactly_as_it_was(
         select(AuditLog).where(AuditLog.action == "payment.checkout_started")
     ).all()
     assert started != []
+
+
+class TestTheSameFlowThroughPaystack:
+    """The point of the gateway interface: the deployment switches processor
+    by changing one setting, and a parent's payment lands the same way. The
+    route, the ledger, and the audit trail are not told which one it was."""
+
+    @pytest.fixture(autouse=True)
+    def a_ghanaian_deployment(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "payment_gateway", PaymentProvider.PAYSTACK)
+        monkeypatch.setattr(settings, "payment_currency", "")
+
+    @pytest.fixture
+    def paystack_calls(self, monkeypatch):
+        return use_fake_gateway(monkeypatch, PaymentProvider.PAYSTACK).calls
+
+    def test_mobile_money_lands_against_the_bill(
+        self, api, parent_with_a_bill, paystack_calls, db_session
+    ):
+        from tests import paystack_helpers
+
+        parent, headers, bill = parent_with_a_bill
+
+        started = api.post(
+            "/payments/checkout-session",
+            json={"fee_assignment_id": bill.id, "amount": "125.00"},
+            headers=headers,
+        )
+        assert started.status_code == 201, started.text
+        assert started.json()["provider"] == "paystack"
+        assert started.json()["checkout_url"].startswith("https://checkout.paystack.com/")
+        # Paystack needs the payer's email to open a checkout; the route knows
+        # who is logged in and the gateway is told.
+        assert paystack_calls[0]["payer_email"] == parent.email
+
+        # The delivery Paystack would send, built from what the gateway was
+        # asked for. The reference is the one the checkout was opened with.
+        delivered = paystack_helpers.deliver(
+            api,
+            paystack_helpers.event_body(
+                reference=started.json()["session_id"],
+                fee_assignment_id=paystack_calls[0]["fee_assignment_id"],
+                paid_by_user_id=paystack_calls[0]["paid_by_user_id"],
+                amount=to_minor_units(paystack_calls[0]["amount"]),
+                channel="mobile_money",
+            ),
+        )
+        assert delivered.status_code == 200
+        assert delivered.json()["recorded"] is True
+
+        balance = api.get(f"/students/{bill.student_id}/balance", headers=headers).json()
+        assert balance["paid"] == "125.00"
+        assert balance["outstanding"] == "125.00"
+
+        history = api.get(f"/students/{bill.student_id}/payments", headers=headers).json()
+        assert history["items"][0]["method"] == "mobile_money"
+        assert history["items"][0]["provider"] == "paystack"
+
+        payment = db_session.scalar(select(Payment).where(Payment.fee_assignment_id == bill.id))
+        assert payment.provider_reference == started.json()["session_id"]
+
+    def test_the_gateway_endpoint_says_so(self, api, parent_with_a_bill):
+        _, headers, _ = parent_with_a_bill
+        body = api.get("/payments/gateway", headers=headers).json()
+        assert body["provider"] == "paystack"
+        assert body["display_name"] == "Paystack"
+        assert body["currency"] == "GHS"
+        assert "mobile_money" in body["methods"]
+        assert body["test_mode"] is True

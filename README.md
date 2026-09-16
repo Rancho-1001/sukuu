@@ -60,7 +60,7 @@ flowchart LR
     subgraph Supabase
         DB[(Postgres<br/>NUMERIC money · row locks)]
     end
-    Stripe[Stripe Checkout]
+    Stripe[Stripe · US/Canada<br/>or Paystack · Ghana]
 
     FE -- bearer token --> API
     API --> DB
@@ -69,7 +69,7 @@ flowchart LR
     Stripe -. success URL .-> FE
 ```
 
-The dotted line is the one that matters: the browser's return from Stripe is a *hint*, and the only thing that writes a payment is the signed webhook.
+The dotted line is the one that matters: the browser's return from the processor is a *hint*, and the only thing that writes a payment is the signed webhook. Which processor is one environment variable on the API; the demo runs on Stripe.
 
 ## Decisions worth reading
 
@@ -81,7 +81,9 @@ These are the judgement calls. Each has a test that fails if the decision is und
 
 **The ledger is written by the webhook, never by the redirect.** Anyone can type the success URL. So the success page does not say "paid" — it says "confirming", and watches the balance move past what it was when checkout began. Replays are no-ops via a unique index on `stripe_event_id`, proved in production by having Stripe redeliver the same event. An integrity error at that commit is only treated as a duplicate if the constraint is *that* index; anything else re-raises, because answering "already recorded" to a foreign-key failure would tell Stripe the money was handled and lose it behind a 200.
 
-**Money that arrives but cannot be applied is flagged, not refused.** A bursar records cash while a parent is on the payment page; the card payment then overpays. A 409 would be a lie — the card is already charged and there is no smaller amount to retry. It is audited as `payment.stripe_needs_refund` for a human, and the invariant holds.
+**Money that arrives but cannot be applied is flagged, not refused.** A bursar records cash while a parent is on the payment page; the card payment then overpays. A 409 would be a lie — the card is already charged and there is no smaller amount to retry. It is audited as `payment.online_needs_refund` for a human, and the invariant holds.
+
+**The processor is an interface, and the second one proved it.** Stripe does not operate in Ghana and Paystack does not operate in Canada, so both sit behind one interface with two methods — open a checkout, verify a webhook — and `PAYMENT_GATEWAY` picks one. Everything after verification is shared: the idempotency key, the lock, the needs-refund path, the audit row. Adding Paystack touched no route and no test of the ledger; it added a module, a signing helper, and the tests for what differs — HMAC-SHA512 with no timestamp, a transaction reference instead of an event id, a mobile-money channel that the ledger records as *mobile money* rather than as the company that carried it. A gateway with no secret refuses every delivery with a 503, because an HMAC against an empty key is a signature anyone can produce.
 
 **404, not 403, for another family's child.** A 403 confirms the record exists and lets a parent walk the IDs to learn the school roll. Role guards live in the API; the UI hiding a button is signposting, not security.
 
@@ -108,7 +110,7 @@ Every deny case has a test that fails if you delete the guard.
 
 ## Testing
 
-**465 backend tests, 85 frontend.** Coverage across the money and permission code — the balance rules, the payment service, the ledger queries, the webhook, the role guards — is **99%** (513 statements, 6 missed); 90% overall.
+**567 backend tests, 91 frontend.** Coverage across the money and permission code — the balance rules, the payment service, the ledger queries, both gateways, the webhook, the role guards — is **99%** (467 statements, 6 missed); 89% overall.
 
 ```bash
 cd backend && pytest                     # everything, against real Postgres
@@ -122,7 +124,7 @@ Three conventions carry the suite:
 - **Every list endpoint asserts its query count stays flat** between a one-row page and a seven-row one. An N+1 is a count that tracks the result size; comparing two page sizes catches it without hard-coding a number.
 - **Defences are verified by breaking them.** The lock, the fan-out fix, the idempotency guard, the form-reset bug — each has a test that was confirmed to fail with the defence removed before being kept.
 
-The Stripe webhook tests sign their payloads with the real HMAC scheme rather than patching verification out, so the tampered-body and stale-timestamp cases are actually exercised.
+The webhook tests sign their payloads with the real HMAC schemes — SHA-256 with a timestamp for Stripe, SHA-512 without one for Paystack — rather than patching verification out, so the tampered-body and stale-timestamp cases are actually exercised.
 
 ## Running it locally
 
@@ -161,7 +163,7 @@ backend/app/
     ├── balances.py         # the money rules, pure, no database
     ├── payments.py         # the locked write path
     ├── ledger.py           # aggregations without the fan-out
-    ├── stripe_gateway.py   # the only file that touches the Stripe SDK
+    ├── gateways/           # one interface; stripe.py and paystack.py behind it
     └── rate_limit.py       # failed logins, counted from the audit log
 frontend/src/
 ├── lib/money.ts   # the one door for formatting an amount
@@ -180,15 +182,15 @@ frontend/src/
 
 ## Production notes
 
-**Payment gateway.** Stripe does not operate in Ghana, which is why the demo charges USD in test mode. A deployment for the real market would use **Paystack** or **Flutterwave** — both support mobile money, which is how most school fees there are actually paid. The Stripe SDK is confined to one file so that swap is a file, not a search.
+**Payment gateway.** Both markets are wired: `PAYMENT_GATEWAY=stripe` for the US and Canada, `PAYMENT_GATEWAY=paystack` for Ghana, where it offers mobile money — MTN MoMo, Telecel Cash — which is how most school fees there are actually paid. Going live on either needs a registered business; the code does not care which. The demo runs on Stripe because Stripe's test mode needs no paperwork.
 
-**Currency.** The demo is USD. Production would be GHS, and locale-aware.
+**Currency.** Defaults to USD on Stripe and GHS on Paystack; `PAYMENT_CURRENCY` overrides (a Canadian school sets `cad`). The frontend's `VITE_CURRENCY` formats amounts and has to agree with it — the one setting a gateway switch touches on the frontend.
 
 **Hosting.** Free Render instances sleep, and free Render Postgres *expires after 30 days* — which is why the database is Supabase. Both are in the deploy notes.
 
 ## History
 
-The commit history is written to be read; each message explains the decision, not just the change. Phases 0–8 are checked off with their judgement calls in [docs/roadmap.md](docs/roadmap.md).
+The commit history is written to be read; each message explains the decision, not just the change. Phases 0–8 are checked off with their judgement calls in [docs/roadmap.md](docs/roadmap.md), which also lays out Part II — the phases between a demo and a product a school could run on.
 
 ## License
 

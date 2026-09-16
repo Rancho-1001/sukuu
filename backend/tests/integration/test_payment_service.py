@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.models import PaymentMethod
+from app.models import PaymentMethod, PaymentProvider
 from app.services.balances import (
     AlreadySettledError,
     NonPositivePaymentError,
@@ -98,32 +98,47 @@ class TestMethodAndIdentifiersAgree:
     than at the mistake.
     """
 
-    def test_cash_cannot_carry_a_payment_intent(self, db_session, assignment):
+    @pytest.mark.parametrize(
+        "field",
+        ["provider_reference", "provider_event_id", "provider"],
+    )
+    def test_cash_cannot_carry_provider_fields(self, db_session, assignment, field):
+        value = PaymentProvider.STRIPE if field == "provider" else "x_123"
         with pytest.raises(ValueError, match="cash payment"):
-            cash(db_session, assignment.id, Decimal("10.00"), stripe_payment_intent_id="pi_123")
+            cash(db_session, assignment.id, Decimal("10.00"), **{field: value})
 
-    def test_cash_cannot_carry_an_event_id(self, db_session, assignment):
-        with pytest.raises(ValueError, match="cash payment"):
-            cash(db_session, assignment.id, Decimal("10.00"), stripe_event_id="evt_123")
+    @pytest.mark.parametrize("method", [PaymentMethod.CARD, PaymentMethod.MOBILE_MONEY])
+    def test_an_online_payment_needs_all_three_provider_fields(
+        self, db_session, assignment, method
+    ):
+        """Any one missing is refused. A row with a provider but no event id is
+        one a replayed webhook could duplicate; a reference with no provider is
+        a number nobody can look up."""
+        complete = {
+            "provider": PaymentProvider.PAYSTACK,
+            "provider_reference": "sukuu-1-abc",
+            "provider_event_id": "charge.success:sukuu-1-abc",
+        }
+        for missing in complete:
+            fields = {k: v for k, v in complete.items() if k != missing}
+            with pytest.raises(ValueError, match="online payment"):
+                record_payment(
+                    db_session,
+                    fee_assignment_id=assignment.id,
+                    amount=Decimal("10.00"),
+                    method=method,
+                    **fields,
+                )
 
-    def test_stripe_needs_a_payment_intent(self, db_session, assignment):
-        with pytest.raises(ValueError, match="payment intent"):
-            record_payment(
-                db_session,
-                fee_assignment_id=assignment.id,
-                amount=Decimal("10.00"),
-                method=PaymentMethod.STRIPE,
-            )
-
-    def test_a_stripe_payment_with_its_identifiers_is_accepted(self, db_session, assignment):
-        """Phase 5's path, open before Phase 5 needs it."""
+    def test_an_online_payment_with_its_identifiers_is_accepted(self, db_session, assignment):
         payment = record_payment(
             db_session,
             fee_assignment_id=assignment.id,
             amount=Decimal("10.00"),
-            method=PaymentMethod.STRIPE,
-            stripe_payment_intent_id="pi_123",
-            stripe_event_id="evt_123",
+            method=PaymentMethod.CARD,
+            provider=PaymentProvider.STRIPE,
+            provider_reference="pi_123",
+            provider_event_id="evt_123",
         )
-        assert payment.method is PaymentMethod.STRIPE
+        assert payment.method is PaymentMethod.CARD
         assert payment.recorded_by_id is None

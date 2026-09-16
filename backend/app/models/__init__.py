@@ -5,7 +5,13 @@ autogenerate inspects it. A model that is never imported is a model Alembic
 will happily generate a DROP TABLE for.
 """
 
-from app.models.enums import BillingPeriod, PaymentMethod, StudentStatus, UserRole
+from app.models.enums import (
+    BillingPeriod,
+    PaymentMethod,
+    PaymentProvider,
+    StudentStatus,
+    UserRole,
+)
 from app.models.fees import AuditLog, FeeAssignment, FeeType, Payment
 from app.models.school import SchoolClass, Student, User
 
@@ -16,6 +22,7 @@ __all__ = [
     "FeeType",
     "Payment",
     "PaymentMethod",
+    "PaymentProvider",
     "SchoolClass",
     "Student",
     "StudentStatus",

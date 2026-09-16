@@ -21,6 +21,7 @@ from app.models import (
     FeeType,
     Payment,
     PaymentMethod,
+    PaymentProvider,
     SchoolClass,
     Student,
     User,
@@ -145,7 +146,7 @@ class TestUniqueness:
         make_assignment(db_session, student=student, fee_type=fee_type, period="Term 1 2026")
         make_assignment(db_session, student=student, fee_type=fee_type, period="Term 2 2026")
 
-    def test_a_stripe_event_can_only_be_recorded_once(self, db_session):
+    def test_a_provider_event_can_only_be_recorded_once(self, db_session):
         """The guarantee that makes a replayed webhook a no-op."""
         fa = make_assignment(db_session)
         shared_event = unique("evt")
@@ -154,13 +155,33 @@ class TestUniqueness:
                 Payment(
                     fee_assignment=fa,
                     amount_paid=Decimal("10.00"),
-                    method=PaymentMethod.STRIPE,
-                    stripe_payment_intent_id="pi_123",
-                    stripe_event_id=shared_event,
+                    method=PaymentMethod.CARD,
+                    provider=PaymentProvider.STRIPE,
+                    provider_reference="pi_123",
+                    provider_event_id=shared_event,
                 )
             )
-        with pytest.raises(IntegrityError, match="stripe_event_id"):
+        with pytest.raises(IntegrityError, match="provider_event_id"):
             db_session.flush()
+
+    def test_the_same_event_id_under_a_different_provider_is_a_different_event(self, db_session):
+        """The index is scoped by provider. Stripe's ids and Paystack's
+        references are different namespaces; a collision between them would
+        be a coincidence, and it must not swallow a real payment."""
+        fa = make_assignment(db_session)
+        shared = unique("ref")
+        for provider in (PaymentProvider.STRIPE, PaymentProvider.PAYSTACK):
+            db_session.add(
+                Payment(
+                    fee_assignment=fa,
+                    amount_paid=Decimal("10.00"),
+                    method=PaymentMethod.CARD,
+                    provider=provider,
+                    provider_reference=shared,
+                    provider_event_id=shared,
+                )
+            )
+        db_session.flush()
 
     def test_many_cash_payments_may_have_no_event_id(self, db_session):
         """NULLs are distinct in Postgres, so the unique index must not block cash."""
@@ -172,26 +193,41 @@ class TestUniqueness:
         db_session.flush()
 
 
-class TestMethodAndStripeIdsAgree:
-    def test_cash_payment_carrying_a_stripe_id_is_rejected(self, db_session):
+class TestMethodAndProviderFieldsAgree:
+    def test_cash_payment_carrying_a_provider_reference_is_rejected(self, db_session):
         fa = make_assignment(db_session)
         db_session.add(
             Payment(
                 fee_assignment=fa,
                 amount_paid=Decimal("10.00"),
                 method=PaymentMethod.CASH,
-                stripe_payment_intent_id="pi_should_not_be_here",
+                provider_reference="pi_should_not_be_here",
             )
         )
-        with pytest.raises(IntegrityError, match="stripe_ids_match_method"):
+        with pytest.raises(IntegrityError, match="provider_fields_match_method"):
             db_session.flush()
 
-    def test_stripe_payment_without_an_intent_id_is_rejected(self, db_session):
+    @pytest.mark.parametrize("method", [PaymentMethod.CARD, PaymentMethod.MOBILE_MONEY])
+    def test_online_payment_without_its_provider_fields_is_rejected(self, db_session, method):
+        fa = make_assignment(db_session)
+        db_session.add(Payment(fee_assignment=fa, amount_paid=Decimal("10.00"), method=method))
+        with pytest.raises(IntegrityError, match="provider_fields_match_method"):
+            db_session.flush()
+
+    def test_online_payment_with_a_reference_but_no_event_id_is_rejected(self, db_session):
+        """All three or none. A row without an event id is one a redelivered
+        webhook could record twice."""
         fa = make_assignment(db_session)
         db_session.add(
-            Payment(fee_assignment=fa, amount_paid=Decimal("10.00"), method=PaymentMethod.STRIPE)
+            Payment(
+                fee_assignment=fa,
+                amount_paid=Decimal("10.00"),
+                method=PaymentMethod.MOBILE_MONEY,
+                provider=PaymentProvider.PAYSTACK,
+                provider_reference="sukuu-1-abc",
+            )
         )
-        with pytest.raises(IntegrityError, match="stripe_ids_match_method"):
+        with pytest.raises(IntegrityError, match="provider_fields_match_method"):
             db_session.flush()
 
 

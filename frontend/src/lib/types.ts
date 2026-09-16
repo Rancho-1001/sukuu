@@ -13,7 +13,19 @@ export type Money = string;
 export type UserRole = "admin" | "staff" | "parent";
 export type StudentStatus = "active" | "inactive";
 export type BillingPeriod = "term" | "monthly" | "one_time";
-export type PaymentMethod = "cash" | "stripe";
+/** How the parent paid - what a bursar means by "method". */
+export type PaymentMethod = "cash" | "card" | "mobile_money" | "bank";
+/** Who processed an online payment. `null` on a cash row. */
+export type PaymentProvider = "stripe" | "paystack";
+
+/** Which processor this deployment pays through. Asked of the API, never assumed. */
+export interface Gateway {
+  provider: PaymentProvider;
+  display_name: string;
+  currency: string;
+  methods: PaymentMethod[];
+  test_mode: boolean;
+}
 
 export interface User {
   id: number;
@@ -103,6 +115,7 @@ export interface Payment {
   fee_assignment_id: number;
   amount_paid: Money;
   method: PaymentMethod;
+  provider: PaymentProvider | null;
   paid_at: string;
   recorded_by: { id: number; name: string } | null;
   /** The bill this was against - who, for what, which period. */
@@ -149,6 +162,7 @@ export interface CheckoutSession {
   checkout_url: string;
   fee_assignment_id: number;
   amount: Money;
+  provider: PaymentProvider;
 }
 
 /** One field the API objected to, from its `errors` array. */

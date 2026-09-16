@@ -15,6 +15,7 @@ import type {
   BulkAssignmentResult,
   CashPaymentReceipt,
   CheckoutSession,
+  Gateway,
   ClassBalance,
   FeeAssignment,
   FeeType,
@@ -28,6 +29,7 @@ import type {
 } from "./types";
 
 export const keys = {
+  gateway: () => ["gateway"] as const,
   classes: (params?: unknown) => ["classes", params] as const,
   classBalance: (id: number, offset: number) => ["class-balance", id, offset] as const,
   students: (params?: unknown) => ["students", params] as const,
@@ -54,6 +56,19 @@ export function useUsers(params: ListParams & { role?: string; q?: string } = {}
   return useQuery({
     queryKey: keys.users(params),
     queryFn: () => api.get<Page<User>>(`/users${query({ limit: 200, ...params })}`),
+  });
+}
+
+/**
+ * Which processor the pay button opens. A deployment decision made on the
+ * API, so the UI asks rather than being built with the answer baked in.
+ * Changes with a redeploy and never during a session, hence the long staleTime.
+ */
+export function useGateway() {
+  return useQuery({
+    queryKey: keys.gateway(),
+    queryFn: () => api.get<Gateway>("/payments/gateway"),
+    staleTime: Infinity,
   });
 }
 
