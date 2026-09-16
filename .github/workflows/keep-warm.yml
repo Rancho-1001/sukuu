@@ -1,0 +1,23 @@
+name: Keep warm
+
+# Free Render instances sleep after fifteen idle minutes and take ~50s to
+# wake, which reads as "the site is broken" to anyone clicking the demo link.
+# A ping every ten minutes keeps it up. GitHub may delay scheduled runs and
+# disables the schedule after 60 days without a commit, so this is a comfort,
+# not a guarantee — the login page still explains a cold start.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Hit /health
+        run: |
+          curl --silent --show-error --fail --max-time 90 \
+            --retry 2 --retry-delay 15 \
+            https://sukuu-api.onrender.com/health

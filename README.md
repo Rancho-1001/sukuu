@@ -12,7 +12,7 @@ Fees, installments, and payments for a primary school — with three roles the s
 | Bursar | `bursar@sukuu.demo` | `sukuu-demo` |
 | Parent | `parent@sukuu.demo` | `sukuu-demo` |
 
-The API sleeps on free hosting after fifteen quiet minutes; the first request of the day can take a minute, and the page says so. Card payments are Stripe test mode — use `4242 4242 4242 4242` with any future date. No real money moves.
+The API is on free hosting that sleeps after fifteen quiet minutes. A scheduled ping keeps it awake most of the time; if you do catch it cold, the first request takes about a minute, and the page says so. Card payments are Stripe test mode — use `4242 4242 4242 4242` with any future date. No real money moves.
 
 ![Admin dashboard: collected and outstanding across the school, per class](docs/screenshots/dashboard.png)
 
@@ -188,7 +188,7 @@ frontend/src/
 
 ## History
 
-The commit history is written to be read; each message explains the decision, not just the change. Phases 0–7 are checked off with their judgement calls in [docs/roadmap.md](docs/roadmap.md).
+The commit history is written to be read; each message explains the decision, not just the change. Phases 0–8 are checked off with their judgement calls in [docs/roadmap.md](docs/roadmap.md).
 
 ## License
 
