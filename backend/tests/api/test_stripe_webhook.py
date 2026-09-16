@@ -15,7 +15,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.models import AuditLog, Payment, PaymentMethod, UserRole
+from app.models import AuditLog, Payment, PaymentMethod, PaymentProvider, UserRole
 from tests.stripe_helpers import WEBHOOK_URL, deliver, event_body, sign
 
 pytestmark = pytest.mark.db
@@ -88,7 +88,8 @@ class TestRecordingThePayment:
         ).all()
         assert len(payments) == 1
         assert payments[0].amount_paid == Decimal("250.00")
-        assert payments[0].method is PaymentMethod.STRIPE
+        assert payments[0].method is PaymentMethod.CARD
+        assert payments[0].provider is PaymentProvider.STRIPE
 
     def test_minor_units_come_back_to_decimal(self, api, bill, db_session):
         deliver(api, event_body(fee_assignment_id=bill.id, amount_total=8250))
@@ -100,8 +101,8 @@ class TestRecordingThePayment:
         event id is what makes a replay a no-op."""
         deliver(api, event_body(fee_assignment_id=bill.id, event_id="evt_abc"))
         payment = db_session.scalar(select(Payment).where(Payment.fee_assignment_id == bill.id))
-        assert payment.stripe_event_id == "evt_abc"
-        assert payment.stripe_payment_intent_id == "pi_test_1"
+        assert payment.provider_event_id == "evt_abc"
+        assert payment.provider_reference == "pi_test_1"
 
     def test_nobody_is_credited_with_recording_it(self, api, bill, db_session):
         """recorded_by is for a person who took cash. A webhook is not one."""
@@ -127,7 +128,7 @@ class TestRecordingThePayment:
     def test_the_audit_row_names_the_event(self, api, bill, db_session):
         deliver(api, event_body(fee_assignment_id=bill.id, event_id="evt_audit"))
         entry = db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "payment.stripe").order_by(AuditLog.id.desc())
+            select(AuditLog).where(AuditLog.action == "payment.online").order_by(AuditLog.id.desc())
         ).first()
         assert entry is not None
         assert "evt_audit" in entry.detail
@@ -136,7 +137,7 @@ class TestRecordingThePayment:
     def test_the_paying_parent_is_credited_on_the_audit_row(self, api, bill, parent, db_session):
         deliver(api, event_body(fee_assignment_id=bill.id, paid_by_user_id=parent.id))
         entry = db_session.scalars(
-            select(AuditLog).where(AuditLog.action == "payment.stripe").order_by(AuditLog.id.desc())
+            select(AuditLog).where(AuditLog.action == "payment.online").order_by(AuditLog.id.desc())
         ).first()
         assert entry.user_id == parent.id
 
@@ -199,9 +200,10 @@ class TestIdempotency:
             Payment(
                 fee_assignment_id=other.id,
                 amount_paid=Decimal("1.00"),
-                method=PaymentMethod.STRIPE,
-                stripe_payment_intent_id="pi_x",
-                stripe_event_id="evt_unique",
+                method=PaymentMethod.CARD,
+                provider=PaymentProvider.STRIPE,
+                provider_reference="pi_x",
+                provider_event_id="evt_unique",
             )
         )
         with pytest.raises(IntegrityError):
@@ -308,7 +310,7 @@ class TestMoneyThatCannotBeApplied:
 
         entry = db_session.scalars(
             select(AuditLog)
-            .where(AuditLog.action == "payment.stripe_needs_refund")
+            .where(AuditLog.action == "payment.online_needs_refund")
             .order_by(AuditLog.id.desc())
         ).first()
         assert entry is not None
@@ -350,3 +352,50 @@ class TestAFailureIsNotReportedAsSuccess:
         second = deliver(api, payload)
         assert second.status_code == 200
         assert second.json()["reason"] == "event already recorded"
+
+
+class TestWrongCurrency:
+    """A payment in a currency other than the one this deployment charges in
+    cannot be applied at face value - 250.00 of something is not 250.00 of the
+    bill - and it has already moved. Same answer as an overpayment: flag it."""
+
+    def test_it_is_not_recorded(self, api, bill, db_session):
+        response = deliver(api, event_body(fee_assignment_id=bill.id, currency="ghs"))
+        assert response.status_code == 200
+        assert response.json()["recorded"] is False
+        assert "reconciliation" in response.json()["reason"]
+        assert db_session.scalars(select(Payment)).all() == []
+
+    def test_it_is_audited_with_the_currency(self, api, bill, db_session):
+        deliver(api, event_body(fee_assignment_id=bill.id, currency="ghs", event_id="evt_ghs"))
+        entry = db_session.scalars(
+            select(AuditLog).where(AuditLog.action == "payment.online_needs_refund")
+        ).first()
+        assert entry is not None
+        assert "evt_ghs" in entry.detail
+        assert "currency is ghs" in entry.detail
+
+
+class TestWithoutASecret:
+    """A gateway that has no secret cannot verify anything, so it must not
+    accept anything. The failure is a 503, not a 200: Stripe will retry, which
+    is right, because the fix is a deploy away."""
+
+    @pytest.fixture
+    def no_secret(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "stripe_webhook_secret", "")
+
+    def test_every_delivery_is_refused(self, api, bill, no_secret):
+        response = deliver(api, event_body(fee_assignment_id=bill.id))
+        assert response.status_code == 503
+        assert "not configured" in response.json()["detail"]
+
+    def test_even_one_signed_with_an_empty_key(self, api, bill, no_secret, db_session):
+        """The attack this exists to stop: with no secret, ``sign`` with an
+        empty key would be exactly what the verifier computes."""
+        payload = event_body(fee_assignment_id=bill.id)
+        response = deliver(api, payload, signature=sign(payload, secret=""))
+        assert response.status_code == 503
+        assert db_session.scalars(select(Payment)).all() == []

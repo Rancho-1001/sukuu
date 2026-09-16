@@ -15,6 +15,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://sukuu:sukuu@localhos
 os.environ.setdefault("JWT_SECRET", "test-secret-never-used-in-production")
 os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_dummy")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_dummy")
+os.environ.setdefault("PAYSTACK_SECRET_KEY", "sk_test_paystack_dummy")
 
 import pytest  # noqa: E402
 

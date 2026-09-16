@@ -31,7 +31,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import FeeAssignment, Payment, PaymentMethod
+from app.models import FeeAssignment, Payment, PaymentMethod, PaymentProvider
 from app.services.balances import validate_payment
 
 
@@ -46,8 +46,9 @@ def record_payment(
     amount: Decimal | int | str,
     method: PaymentMethod,
     recorded_by_id: int | None = None,
-    stripe_payment_intent_id: str | None = None,
-    stripe_event_id: str | None = None,
+    provider: PaymentProvider | None = None,
+    provider_reference: str | None = None,
+    provider_event_id: str | None = None,
 ) -> Payment:
     """Validate and insert one payment, holding the assignment's row lock.
 
@@ -55,17 +56,24 @@ def record_payment(
     and the :class:`~app.services.balances.PaymentError` family - non-positive,
     already settled, overpayment - if the money rules refuse it.
 
-    ``recorded_by_id`` is nullable only because a Stripe payment is recorded by
-    the webhook rather than a person. Every cash payment has one, and the route
-    is what guarantees it.
+    ``recorded_by_id`` is nullable only because an online payment is recorded
+    by the webhook rather than a person. Every cash payment has one, and the
+    route is what guarantees it.
+
+    An online payment carries all three provider fields: who processed it, its
+    id on their side, and the delivery that recorded it. Cash carries none.
     """
-    if method is PaymentMethod.CASH and (stripe_payment_intent_id or stripe_event_id):
+    provider_fields = (provider, provider_reference, provider_event_id)
+    if method is PaymentMethod.CASH and any(provider_fields):
         # The database has a CHECK constraint saying the same thing. Catching it
         # here turns an IntegrityError raised at commit - by which point the
         # caller has done other work - into an error at the call that caused it.
-        raise ValueError("A cash payment cannot carry Stripe identifiers.")
-    if method is PaymentMethod.STRIPE and not stripe_payment_intent_id:
-        raise ValueError("A Stripe payment must carry a payment intent id.")
+        raise ValueError("A cash payment cannot carry payment-provider identifiers.")
+    if method is not PaymentMethod.CASH and not all(provider_fields):
+        raise ValueError(
+            "An online payment must carry its provider, the provider's reference, "
+            "and the event that recorded it."
+        )
 
     # FOR UPDATE. Everything below happens while this row is held.
     assignment = db.scalar(
@@ -88,8 +96,9 @@ def record_payment(
         amount_paid=accepted,
         method=method,
         recorded_by_id=recorded_by_id,
-        stripe_payment_intent_id=stripe_payment_intent_id,
-        stripe_event_id=stripe_event_id,
+        provider=provider,
+        provider_reference=provider_reference,
+        provider_event_id=provider_event_id,
     )
     db.add(payment)
     # Flush rather than commit: the caller may still have work to do inside

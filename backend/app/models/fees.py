@@ -26,7 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
-from app.models.enums import BillingPeriod, PaymentMethod
+from app.models.enums import BillingPeriod, PaymentMethod, PaymentProvider
 
 if TYPE_CHECKING:
     from app.models.school import Student, User
@@ -99,13 +99,20 @@ class Payment(Base, TimestampMixin):
     __tablename__ = "payments"
     __table_args__ = (
         CheckConstraint("amount_paid > 0", name="amount_paid_positive"),
-        # Stripe retries webhooks. Recording the event id under a unique index
-        # is what makes a replayed delivery a no-op instead of a double credit.
-        UniqueConstraint("stripe_event_id", name="stripe_event_id"),
+        # Processors retry webhooks. Recording the event id under a unique
+        # index is what makes a replayed delivery a no-op instead of a double
+        # credit. Scoped by provider: Stripe's "evt_..." and Paystack's
+        # reference live in different namespaces and must not collide.
+        UniqueConstraint("provider", "provider_event_id", name="provider_event_id"),
+        # Cash carries no provider fields; anything else carries all three.
+        # The payment service raises the same rule as a ValueError at the call
+        # site, where it is easier to read than an IntegrityError at commit.
         CheckConstraint(
-            "(method = 'stripe' AND stripe_payment_intent_id IS NOT NULL)"
-            " OR (method = 'cash' AND stripe_payment_intent_id IS NULL)",
-            name="stripe_ids_match_method",
+            "(method = 'cash' AND provider IS NULL AND provider_reference IS NULL"
+            " AND provider_event_id IS NULL)"
+            " OR (method <> 'cash' AND provider IS NOT NULL AND provider_reference IS NOT NULL"
+            " AND provider_event_id IS NOT NULL)",
+            name="provider_fields_match_method",
         ),
     )
 
@@ -117,13 +124,20 @@ class Payment(Base, TimestampMixin):
     method: Mapped[PaymentMethod] = mapped_column(
         _pg_enum(PaymentMethod, "payment_method"), nullable=False
     )
-    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    stripe_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider: Mapped[PaymentProvider | None] = mapped_column(
+        _pg_enum(PaymentProvider, "payment_provider"), nullable=True
+    )
+    # The processor's own id for the money: a Stripe payment intent, a Paystack
+    # transaction reference. What a human types into the processor's dashboard
+    # to find this payment.
+    provider_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The id of the webhook delivery that recorded it - the idempotency key.
+    provider_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     paid_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    # Nullable because a Stripe payment is recorded by the webhook, not a person.
+    # Nullable because an online payment is recorded by the webhook, not a person.
     recorded_by_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=True, index=True
     )

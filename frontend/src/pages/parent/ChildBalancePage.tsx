@@ -4,7 +4,23 @@ import { Link, useParams } from "react-router-dom";
 import { PayForm } from "../../components/PayForm";
 import { StudentLedger } from "../../components/StudentLedger";
 import { Button } from "../../components/ui";
-import { useStartCheckout, useStudentBalance } from "../../lib/queries";
+import { describeMethods } from "../../lib/methods";
+import { useGateway, useStartCheckout, useStudentBalance } from "../../lib/queries";
+
+/**
+ * Which processor, and what it takes, comes from the API. Until it answers -
+ * or if it cannot - the sentence is still true, just less specific.
+ */
+function GatewayNotice() {
+  const { data: gateway } = useGateway();
+  if (!gateway) return <>You will be taken to a secure payment page.</>;
+  return (
+    <>
+      You will be taken to {gateway.display_name} to pay by {describeMethods(gateway.methods)}.
+      {gateway.test_mode ? " Test mode — no real money moves." : ""}
+    </>
+  );
+}
 
 export function ChildBalancePage() {
   const { studentId } = useParams();
@@ -48,14 +64,14 @@ export function ChildBalancePage() {
                     fee_assignment_id: line.id,
                     amount,
                   });
-                  // Stripe's hosted page takes it from here. Nothing is
+                  // The processor's hosted page takes it from here. Nothing is
                   // recorded until the webhook arrives, so closing the tab at
                   // this point loses nothing and the payment still lands.
                   window.location.assign(session.checkout_url);
                 }}
               />
               <p className="mt-3 text-xs text-slate-500">
-                You will be taken to Stripe to pay by card. Test mode — no real money moves.
+                <GatewayNotice />
               </p>
             </div>
           )}

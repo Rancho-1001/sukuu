@@ -1,14 +1,14 @@
 /**
- * Where Stripe sends a parent after checkout.
+ * Where the payment processor sends a parent after checkout.
  *
  * The redirect is not proof of payment - only the webhook is, and it arrives
  * on its own schedule. So the success page does not say "paid". It says
  * "confirming", watches the balance, and says "confirmed" only when the
  * amount paid has moved past what it was when checkout started. That number
  * (`paid_before`) rides on the URL because nothing else survives the round
- * trip through Stripe.
+ * trip through the processor.
  *
- * If the webhook is slow - the API was asleep, Stripe is retrying - the page
+ * If the webhook is slow - the API was asleep, the processor is retrying - the page
  * says that too, rather than spinning forever or lying.
  */
 
@@ -17,7 +17,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { Amount, Banner, Button, Card, Spinner } from "../../components/ui";
 import { toMinorUnits } from "../../lib/money";
-import { useStudentBalance } from "../../lib/queries";
+import { useGateway, useStudentBalance } from "../../lib/queries";
 
 const POLL_MS = 3000;
 const GIVE_UP_AFTER_MS = 90_000;
@@ -34,6 +34,9 @@ function useReturnContext() {
 export function PaymentSuccessPage() {
   const { student, fee, paidBefore, valid } = useReturnContext();
   const [waitedTooLong, setWaitedTooLong] = useState(false);
+  // Named honestly or not at all: "Stripe" on a Paystack deployment would be
+  // a page telling a parent something false about their own money.
+  const processor = useGateway().data?.display_name ?? "The payment provider";
 
   const { data: balance } = useStudentBalance(valid ? student : undefined, {
     // Keep asking until the payment shows up or we give up waiting.
@@ -97,9 +100,9 @@ export function PaymentSuccessPage() {
             <h1 className="text-2xl font-semibold text-slate-900">Still confirming</h1>
             <div className="mt-4 text-left">
               <Banner tone="info">
-                Stripe accepted the payment, but the confirmation has not reached the school yet.
-                This usually means the demo server was asleep — Stripe will retry on its own,
-                and the payment will appear in the history without you doing anything.
+                {processor} accepted the payment, but the confirmation has not reached the school
+                yet. This usually means the demo server was asleep — {processor} will retry on its
+                own, and the payment will appear in the history without you doing anything.
               </Banner>
             </div>
           </>
@@ -107,7 +110,7 @@ export function PaymentSuccessPage() {
           <>
             <h1 className="text-2xl font-semibold text-slate-900">Confirming your payment</h1>
             <p className="mt-2 text-slate-600">
-              Stripe has taken the payment. Waiting for the school's records to update — this
+              {processor} has taken the payment. Waiting for the school's records to update — this
               takes a few seconds.
             </p>
             <div className="mt-6">

@@ -107,11 +107,11 @@ class TestRecordingCash:
 class TestTheLedgerCannotBeMadeToLie:
     def test_the_client_cannot_choose_the_method(self, api, staff_headers, bill):
         """The one lie this ledger must not be able to tell about itself.
-        A staff member filing a payment as "stripe" with no Stripe transaction
+        A staff member filing a payment as "card" with no card transaction
         behind it would reconcile to nothing and look exactly like a real one."""
         response = api.post(
             "/payments",
-            json={"fee_assignment_id": bill.id, "amount": "10.00", "method": "stripe"},
+            json={"fee_assignment_id": bill.id, "amount": "10.00", "method": "card"},
             headers=staff_headers,
         )
         assert response.status_code == 422
@@ -259,7 +259,7 @@ class TestListingPayments:
     def test_filtering_by_method(self, api, staff_headers, bill, make_payment):
         make_payment(bill, "10.00")
         body = api.get(
-            f"/payments?fee_assignment_id={bill.id}&method=stripe", headers=staff_headers
+            f"/payments?fee_assignment_id={bill.id}&method=card", headers=staff_headers
         ).json()
         assert body["total"] == 0
 
@@ -319,7 +319,7 @@ def test_a_cash_payment_is_recorded_as_cash(api, staff_headers, bill, db_session
     )
     db_session.refresh(bill)
     assert [p.method for p in bill.payments] == [PaymentMethod.CASH]
-    assert all(p.stripe_payment_intent_id is None for p in bill.payments)
+    assert all(p.provider is None for p in bill.payments)
 
 
 class TestALogLineIsReadable:

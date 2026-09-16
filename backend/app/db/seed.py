@@ -31,6 +31,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.gateways import get_gateway
 
 # Fixed so the demo looks identical on every machine and in screenshots.
 SEED = 20260824
@@ -91,6 +92,7 @@ def already_seeded(session: Session) -> bool:
 
 def seed(session: Session) -> None:
     rng = random.Random(SEED)
+    gateway = get_gateway()
 
     admin = User(
         email="admin@sukuu.demo",
@@ -233,13 +235,17 @@ def seed(session: Session) -> None:
                 continue
             cash = rng.random() < 0.45
             paid_on += timedelta(days=rng.randint(1, 12) if n else 0)
+            # Online payments look like the configured gateway's: a bursar
+            # reading the demo ledger should see the processor they would
+            # actually have.
             session.add(
                 Payment(
                     fee_assignment=assignment,
                     amount_paid=amount,
-                    method=PaymentMethod.CASH if cash else PaymentMethod.STRIPE,
-                    stripe_payment_intent_id=None if cash else f"pi_seed_{assignment.id}_{n}",
-                    stripe_event_id=None if cash else f"evt_seed_{assignment.id}_{n}",
+                    method=PaymentMethod.CASH if cash else rng.choice(gateway.methods),
+                    provider=None if cash else gateway.provider,
+                    provider_reference=None if cash else f"seed_{assignment.id}_{n}",
+                    provider_event_id=None if cash else f"seed_event_{assignment.id}_{n}",
                     recorded_by=bursar if cash else None,
                     paid_at=datetime.combine(
                         min(paid_on, today),

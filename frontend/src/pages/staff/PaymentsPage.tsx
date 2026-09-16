@@ -10,7 +10,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { Amount, Badge, Card, CardHeader, DataState, Pager, Select, Table, Td, Th } from "../../components/ui";
+import { MethodBadge } from "../../components/MethodBadge";
+import { Amount, Card, CardHeader, DataState, Pager, Select, Table, Td, Th } from "../../components/ui";
+import { ALL_METHODS, methodLabel } from "../../lib/methods";
 import { useClasses, usePayments } from "../../lib/queries";
 
 const PAGE_SIZE = 25;
@@ -66,9 +68,12 @@ export function PaymentsPage() {
                   setOffset(0);
                 }}
               >
-                <option value="">Cash and card</option>
-                <option value="cash">Cash only</option>
-                <option value="stripe">Card only</option>
+                <option value="">All methods</option>
+                {ALL_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {methodLabel(m)} only
+                  </option>
+                ))}
               </Select>
             </>
           }
@@ -105,9 +110,7 @@ export function PaymentsPage() {
                   </span>
                 </Td>
                 <Td label="Method">
-                  <Badge tone={payment.method === "stripe" ? "slate" : "amber"}>
-                    {payment.method === "stripe" ? "Card" : "Cash"}
-                  </Badge>
+                  <MethodBadge method={payment.method} />
                 </Td>
                 <Td label="Recorded by">
                   {payment.recorded_by?.name ?? <span className="text-slate-400">Online</span>}

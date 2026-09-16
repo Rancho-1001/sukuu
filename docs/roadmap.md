@@ -313,3 +313,152 @@ The phase people skip. For a project whose purpose is to be read, this is the de
 
 **Done when** someone who has never met you understands the problem, the solution, and the
 judgement calls in under two minutes. ✅
+
+---
+
+# Part II — from demo to product
+
+Phases 0–8 made something worth reading. These make something a school could run on.
+Two markets are in view — Ghana, where the story is, and North America, where the
+incumbents are — so the design has to serve both, and the selling starts with one.
+
+The order is by dependency, not by appeal: nothing after Phase 9 can go live until the
+processor can, and nothing after Phase 10 can be used until a school can get its families
+in. Tenancy is last on purpose. One deployment per school costs about $30 a month and no
+code, which is the right answer until school three is asking.
+
+---
+
+## Phase 9 — A gateway for each market
+
+Stripe is right for the US and Canada and does not operate in Ghana; Paystack is the
+reverse. The processor was already one file. This phase makes it one *interface*, chosen by
+configuration, with both implementations behind it — and finds out whether the boundary was
+real by walking a second processor through it.
+
+- [x] `PaymentGateway` interface: create a checkout, verify and parse a webhook. Nothing
+      outside `services/gateways/` imports a processor's SDK or knows its header names
+- [x] Stripe moved behind it unchanged; Paystack added, GHS, with mobile money as a channel
+- [x] `PAYMENT_GATEWAY=stripe|paystack` selects one; the currency and the secrets go with it,
+      and the API refuses to start with a gateway that has no secret
+- [x] `payments` stops being Stripe-shaped: `provider`, `provider_reference`,
+      `provider_event_id`, and a `method` that says what the parent actually used —
+      cash, card, mobile money, bank — rather than which company processed it
+- [x] One webhook handler for both. The processor-specific part is parsing; the
+      idempotency, the lock, the needs-refund path, and the audit trail are shared
+- [x] A webhook endpoint with no secret configured refuses every delivery, because an HMAC
+      against an empty key is a signature anyone can produce
+- [x] Paystack webhook tests signed with the real scheme — HMAC-SHA512 of the raw body
+      against the secret key — including the tampered-body case
+- [x] The frontend learns which gateway it is talking to from the API, not from a build flag:
+      the pay button, the badges, and the result page name the right processor
+- [ ] Verified live against Paystack's test mode: a mobile-money test number, the signed
+      webhook, and a replay that records nothing
+
+> The interface has two methods because that is what both implementations shared once
+> written. Paystack has no event id, no timestamp in its signature, no failure webhooks,
+> and one key for everything; Stripe has all four. Both reduce to "here is a verified
+> delivery; it is paid / unpaid / failed / not ours" and the ledger takes it from there.
+
+> The migration renames `stripe` to `card` in the method enum rather than mapping it:
+> every online payment so far was a card through Stripe, so the backfill is exact. The
+> downgrade rebuilds the old enum and refuses if any mobile-money or bank row exists,
+> because the old schema cannot say what that money was.
+
+> The first uncovered bug: with no `STRIPE_WEBHOOK_SECRET` set, the previous code would
+> have verified deliveries against an empty key - a signature anyone can compute. Now the
+> API refuses to start without the chosen gateway's secrets, and either webhook route
+> answers 503 if its own are missing.
+
+> Unit tests build `Settings` with `_env_file=None`. Without that, a developer's local
+> Stripe keys decided whether "Paystack needs no Stripe secrets" passed.
+
+**Done when** switching a deployment from Stripe to Paystack is an environment change and a
+redeploy, with no code edited and every test still passing. Code-complete; the live Paystack
+walk-through (last box) needs a Paystack test key.
+
+---
+
+## Phase 10 — Onboarding
+
+Nobody can be created except by the seed script; a school cannot start.
+
+- [ ] Admin creates staff and parent accounts; parents are invited, not given passwords
+- [ ] Invite by SMS as well as email — many parents have no email address
+- [ ] Set-password and reset-password flows with single-use, expiring tokens
+- [ ] Phone number as a login identifier alongside email
+- [ ] Two guardians per student — a join table, not a second column
+
+**Done when** an admin can bring a new family from "not in the system" to "paid a fee" without
+anyone touching the database.
+
+---
+
+## Phase 11 — Bulk import
+
+Every school already has a spreadsheet. Onboarding cost is decided here.
+
+- [ ] Upload students and guardians from CSV/XLSX
+- [ ] Preview before commit: what will be created, what matched an existing record, what
+      could not be read — and nothing written until the admin says so
+- [ ] Tolerant of the real thing: missing birthdates, duplicate names, a phone number as the
+      only identifier, a class name spelled three ways
+- [ ] The whole file succeeds or nothing does
+
+**Done when** a bursar can load a 400-student school from their existing spreadsheet in an
+afternoon, and the mismatches are a list rather than a surprise.
+
+---
+
+## Phase 12 — The academic calendar
+
+`BillingPeriod` is a label. "Who still owes from last term" is a daily question.
+
+- [ ] Academic year and term as records; fee assignments belong to one
+- [ ] Balance brought forward across terms
+- [ ] Waivers, discounts and scholarships as first-class adjustments with an audit row each
+- [ ] Sibling discounts
+
+**Done when** the bursar can open a new term and every family's opening balance is right
+without a spreadsheet.
+
+---
+
+## Phase 13 — Receipts and exports
+
+The two things a bursar asks for on day one.
+
+- [ ] Numbered receipts with the school's name and logo, printable, one per payment
+- [ ] Year-end statement per family — in North America this is a tax document
+- [ ] Excel export of every list the bursar can see
+
+**Done when** a parent can walk away from the office with a piece of paper.
+
+---
+
+## Phase 14 — Messaging
+
+The feature that changes collection rates, which is what the product is sold on.
+
+- [ ] Payment confirmations by SMS
+- [ ] Fee reminders on a schedule the admin sets
+- [ ] Invites (from Phase 10) on the same channel
+- [ ] Provider behind an interface like the gateway — Arkesel or Hubtel for Ghana, Twilio
+      for North America
+
+**Done when** a parent who paid by mobile money gets a text before they have put the phone
+down.
+
+---
+
+## Phase 15 — Tenancy
+
+Only when deployment-per-school starts to hurt.
+
+- [ ] A `schools` table and a `school_id` on everything that belongs to one
+- [ ] Every query filtered by the caller's school, and a test per endpoint proving school A
+      cannot read school B — 404, not 403, the same rule as for parents
+- [ ] Per-school gateway credentials and settlement
+- [ ] Data residency: a Canadian school's data stays in Canada
+
+**Done when** two schools share one deployment and neither can tell.

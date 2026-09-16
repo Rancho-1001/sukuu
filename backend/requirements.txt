@@ -8,6 +8,9 @@ email-validator==2.3.0
 pydantic-settings==2.15.0
 python-multipart==0.0.32
 stripe==15.5.1
+# Paystack has no maintained SDK worth the dependency; two HTTP calls and an
+# HMAC. Same client the test suite already uses.
+httpx2==2.12.0
 
 # Auth. bcrypt directly rather than passlib: passlib's last release was
 # Oct 2020 and its bcrypt handler crashes against bcrypt 5.x. PyJWT rather

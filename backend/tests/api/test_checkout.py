@@ -1,7 +1,7 @@
-"""Opening a Stripe Checkout session.
+"""Opening a hosted checkout.
 
-Stripe itself is replaced here - the gateway has its own tests for what gets
-sent. What matters at this layer is who may start a payment, for which bill,
+The processor itself is replaced here - each gateway has its own tests for
+what gets sent. What matters at this layer is who may start a payment, for which bill,
 and for how much.
 """
 
@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import AuditLog, Payment, UserRole
+from tests.gateway_helpers import use_fake_gateway
 
 pytestmark = pytest.mark.db
 
@@ -22,19 +23,7 @@ URL = "/payments/checkout-session"
 @pytest.fixture
 def stripe_calls(monkeypatch):
     """Capture what the route asks the gateway for, without leaving the box."""
-    from app.api.routes import checkout
-    from app.services.stripe_gateway import CheckoutSession
-
-    calls = []
-
-    def fake_create(**kwargs):
-        calls.append(kwargs)
-        return CheckoutSession(
-            id="cs_test_fake", url="https://checkout.stripe.com/c/pay/cs_test_fake"
-        )
-
-    monkeypatch.setattr(checkout.stripe_gateway, "create_checkout_session", fake_create)
-    return calls
+    return use_fake_gateway(monkeypatch).calls
 
 
 @pytest.fixture
@@ -55,7 +44,8 @@ class TestStartingAPayment:
         assert response.status_code == 201, response.text
         body = response.json()
         assert body["checkout_url"].startswith("https://checkout.stripe.com/")
-        assert body["session_id"] == "cs_test_fake"
+        assert body["session_id"] == "cs_test_1"
+        assert body["provider"] == "stripe"
         assert body["amount"] == "250.00"
 
     def test_a_partial_amount_is_allowed(self, api, family, stripe_calls):
@@ -100,7 +90,8 @@ class TestStartingAPayment:
         ).first()
         assert entry is not None
         assert entry.user_id == parent.id
-        assert "cs_test_fake" in entry.detail
+        assert "session=cs_test_1" in entry.detail
+        assert "provider=stripe" in entry.detail
         assert entry.target == f"fee_assignment:{bill.id}"
 
 
@@ -245,3 +236,35 @@ class TestWhereStripeSendsThemBack:
         cancel = stripe_calls[0]["cancel_url"]
         assert cancel.startswith("http://localhost:5173/payments/cancelled?")
         assert f"student={bill.student_id}" in cancel
+
+
+class TestDescribingTheGateway:
+    """The frontend learns which processor it is talking to from here, so a
+    switch is one environment change on the API and nothing on the frontend."""
+
+    def test_any_signed_in_user_may_ask(self, api, family):
+        _, headers, _ = family
+        body = api.get("/payments/gateway", headers=headers).json()
+        assert body == {
+            "provider": "stripe",
+            "display_name": "Stripe",
+            "currency": "USD",
+            "methods": ["card"],
+            "test_mode": True,
+        }
+
+    def test_anonymous_may_not(self, api):
+        assert api.get("/payments/gateway").status_code == 401
+
+    def test_a_live_key_is_not_test_mode(self, api, family, monkeypatch):
+        """The "no real money moves" notice must only appear when it is true."""
+        from app.core.config import settings
+
+        _, headers, _ = family
+        monkeypatch.setattr(settings, "stripe_secret_key", "sk_live_abc")
+        assert api.get("/payments/gateway", headers=headers).json()["test_mode"] is False
+
+    def test_the_payer_email_is_handed_to_the_gateway(self, api, family, stripe_calls):
+        parent, headers, bill = family
+        api.post(URL, json={"fee_assignment_id": bill.id, "amount": "10.00"}, headers=headers)
+        assert stripe_calls[0]["payer_email"] == parent.email

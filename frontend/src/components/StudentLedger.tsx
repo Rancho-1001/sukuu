@@ -3,13 +3,14 @@
  *
  * The parent's view and the bursar's view of a child are the same ledger
  * with one difference: what the button on an unpaid line does. A parent is
- * sent to Stripe; a bursar records cash. That is a render prop, and
+ * sent to the payment processor; a bursar records cash. That is a render prop, and
  * everything else - totals, lines, history - is shared so the two screens
  * cannot drift apart on how a balance is presented.
  */
 
 import type { ReactNode } from "react";
 
+import { MethodBadge } from "./MethodBadge";
 import { Amount, Badge, Card, CardHeader, DataState, Table, Td, Th } from "./ui";
 import { useStudentBalance, useStudentPayments } from "../lib/queries";
 import type { FeeAssignment, StudentBalance } from "../lib/types";
@@ -142,9 +143,7 @@ export function PaymentHistory({ studentId }: { studentId: number }) {
             <tr key={payment.id}>
               <Td label="Date">{new Date(payment.paid_at).toLocaleDateString()}</Td>
               <Td label="Method">
-                <Badge tone={payment.method === "stripe" ? "slate" : "amber"}>
-                  {payment.method === "stripe" ? "Card" : "Cash"}
-                </Badge>
+                <MethodBadge method={payment.method} />
               </Td>
               <Td label="Recorded by">{payment.recorded_by?.name ?? "Online"}</Td>
               <Td label="Amount" align="right" className="font-medium">

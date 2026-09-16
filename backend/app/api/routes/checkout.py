@@ -2,9 +2,12 @@
 
 A parent picks a bill and an amount, and gets back somewhere to be sent. That
 is all this route does: no payment row is written here, and none is written
-when the browser comes back from Stripe either. The only thing that records
-money is the signed webhook, because it is the only one of the three that
-cannot be fabricated by whoever is holding the browser.
+when the browser comes back from the processor either. The only thing that
+records money is the signed webhook, because it is the only one of the three
+that cannot be fabricated by whoever is holding the browser.
+
+Which processor is a deployment decision - see ``services/gateways`` - and
+this route does not know. It asks for a checkout and gets a URL.
 
 Parents only. Staff take cash through ``POST /payments``; a parent being able
 to file their own cash payment would be a parent being able to mark their own
@@ -21,12 +24,30 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.errors import unprocessable
 from app.core.config import settings
 from app.models import FeeAssignment, UserRole
-from app.schemas.payments import CheckoutSessionCreate, CheckoutSessionOut
-from app.services import audit, ledger, stripe_gateway
+from app.schemas.payments import CheckoutSessionCreate, CheckoutSessionOut, GatewayOut
+from app.services import audit, gateways, ledger
 from app.services.balances import PaymentError, to_money, validate_payment
 from app.services.rate_limit import client_ip
 
 router = APIRouter(tags=["payments"])
+
+
+@router.get("/payments/gateway", response_model=GatewayOut)
+def describe_gateway(current_user: CurrentUser) -> GatewayOut:
+    """Which processor this deployment pays through, for the UI to say so.
+
+    The frontend learns this from here rather than from a build flag, so that
+    switching a deployment from Stripe to Paystack is one environment change
+    on the API and nothing on the frontend.
+    """
+    gateway = gateways.get_gateway()
+    return GatewayOut(
+        provider=gateway.provider,
+        display_name=gateway.display_name,
+        currency=gateway.currency.upper(),
+        methods=list(gateway.methods),
+        test_mode=gateway.test_mode,
+    )
 
 
 @router.post(
@@ -40,7 +61,7 @@ def create_checkout_session(
     db: DbSession,
     current_user: CurrentUser,
 ) -> CheckoutSessionOut:
-    """Open a Stripe Checkout session for part or all of one fee.
+    """Open a hosted checkout for part or all of one fee.
 
     The amount is validated against the balance here so a parent is not sent
     to a payment page for money they do not owe. That check can still go stale
@@ -72,12 +93,12 @@ def create_checkout_session(
     except PaymentError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
-    # The page Stripe sends the parent back to needs to know what they paid
+    # The page the processor sends the parent back to needs to know what they paid
     # for, and nothing else survives the round trip: no session, no state, just
     # the URL. So the URL carries it. `paid_before` is what lets that page tell
     # "the webhook has landed" from "it has not yet" - the balance moving past
     # this number is the confirmation, and the page can wait for it honestly
-    # instead of declaring success the moment Stripe redirects.
+    # instead of declaring success the moment the redirect lands.
     context = urlencode(
         {
             "student": assignment.student_id,
@@ -85,13 +106,15 @@ def create_checkout_session(
             "paid_before": str(to_money(paid)),
         }
     )
-    session = stripe_gateway.create_checkout_session(
+    gateway = gateways.get_gateway()
+    session = gateway.create_checkout(
         amount=amount,
         fee_assignment_id=assignment.id,
         paid_by_user_id=current_user.id,
+        payer_email=current_user.email,
         description=f"{assignment.fee_type.name} - {assignment.period_label}",
-        success_url=f"{settings.stripe_success_url}?{context}",
-        cancel_url=f"{settings.stripe_cancel_url}?{context}",
+        success_url=f"{settings.payment_success_url}?{context}",
+        cancel_url=f"{settings.payment_cancel_url}?{context}",
     )
 
     # Recorded even though nothing was paid: a session that is opened and never
@@ -102,7 +125,7 @@ def create_checkout_session(
         action="payment.checkout_started",
         user_id=current_user.id,
         target=f"fee_assignment:{assignment.id}",
-        detail=f"session={session.id} amount={amount}",
+        detail=f"provider={gateway.provider.value} session={session.id} amount={amount}",
         ip_address=client_ip(request),
     )
     db.commit()
@@ -112,4 +135,5 @@ def create_checkout_session(
         checkout_url=session.url,
         fee_assignment_id=assignment.id,
         amount=amount,
+        provider=gateway.provider,
     )
