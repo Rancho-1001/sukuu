@@ -110,7 +110,7 @@ Every deny case has a test that fails if you delete the guard.
 
 ## Testing
 
-**567 backend tests, 91 frontend.** Coverage across the money and permission code — the balance rules, the payment service, the ledger queries, both gateways, the webhook, the role guards — is **99%** (467 statements, 6 missed); 89% overall.
+**571 backend tests, 91 frontend.** Coverage across the money and permission code — the balance rules, the payment service, the ledger queries, both gateways, the webhook, the role guards — is **99%** (467 statements, 6 missed); 89% overall.
 
 ```bash
 cd backend && pytest                     # everything, against real Postgres
