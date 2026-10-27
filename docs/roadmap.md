@@ -6,8 +6,8 @@ Phases are numbered because they are a dependency chain, not a preference: the p
 work cannot start before the models exist, and the models should not be written before
 the role guards do.
 
-**Blocking everything after Phase 0:** PostgreSQL is not installed. Nothing in Phases 1-5
-can be written or tested locally until it is.
+**Phase 0 is closed.** Postgres 16 is running locally and the `db`-marked tests execute
+rather than skip, so Phase 1 onward can be written and tested.
 
 ---
 
